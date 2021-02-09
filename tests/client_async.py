@@ -1,63 +1,58 @@
-from siclient import SIAsyncGatewayClient
+from siclient import SIAsyncGatewayClient, SIAsyncGatewayClientCallbacks
 import time
 
 
 client = SIAsyncGatewayClient()
 
 
-def on_connected(access_level):
-    client.subscribe_to_property('dummy.0.3000')
-    print(f'CONNECTED, access_level={access_level}')
+class MyAsyncCallbacks(SIAsyncGatewayClientCallbacks):
+    def on_connected(self, access_level, gateway_version):
+        client.subscribe_to_property('demo.inv.3136')
+        print(f'CONNECTED, access_level={access_level}')
+
+    def on_disconnected(self):
+        print('DISCONNECTED')
+
+    def on_error(self, reason):
+        print(f'ERROR reason={reason}')
+
+    def on_enumerated(self, status, device_count):
+        print(f'ENUMERATED status={status}, count={device_count}')
+
+    def on_description(self, status, id_, description):
+        super().on_description(status, id_, description)
+
+    def on_property_read(self, status, property_id, value):
+        print(f'PROPERTY READ status={status}, id={property_id}, value={value}')
+
+    def on_property_written(self, status, property_id):
+        print(f'PROPERTY WRITE status={status}, id={property_id}')
+
+    def on_property_subscribed(self, status, property_id):
+        print(f'PROPERTY SUBSCRIBED status={status}, id={property_id}')
+
+    def on_property_unsubscribed(self, status, property_id):
+        print(f'PROPERTY UNSUBSCRIBED status={status}, id={property_id}')
+
+    def on_property_updated(self, property_id, value):
+        print(f'PROPERTY UPDATED id={property_id}, value={value}')
+
+    def on_datalog_read(self, status, property_id, count, values):
+        print(f'DATALOG READ status={status}, property_id={property_id}, values={values}')
+
+    def on_device_message(self, id_, message_id, message):
+        print(f'DEVICE MESSAGE id={id}, message_id={message_id}, message={message}')
+
+    def on_messages_read(self, status, count, messages):
+        print(f'MESSAGE READ status={status}, count={count}, messages={messages}')
 
 
-def on_enumerated(status, device_count):
-    print(f'ENUMERATED status={status}, count={device_count}')
-
-
-def on_property_read(status, property_id, value):
-    print(f'PROPERTY READ status={status}, id={property_id}, value={value}')
-
-
-def on_property_written(status, property_id):
-    print(f'PROPERTY WRITE status={status}, id={property_id}')
-
-
-def on_property_subscribed(status, property_id):
-    print(f'PROPERTY SUBSCRIBED status={status}, id={property_id}')
-
-
-def on_property_unsubscribed(status, property_id):
-    print(f'PROPERTY UNSUBSCRIBED status={status}, id={property_id}')
-
-
-def on_property_updated(property_id, value):
-    print(f'PROPERTY UPDATED id={property_id}, value={value}')
-
-
-def on_device_message(id, message_id, message):
-    print(f'DEVICE MESSAGE id={id}, message_id={message_id}, message={message}')
-
-
-def on_disconnected():
-    print('DISCONNECTED')
-
-
-def on_error(error):
-    print(f'ERROR reason:{error}')
+callbacks = MyAsyncCallbacks()
 
 
 if __name__ == "__main__":
-    client.on_connected = on_connected
-    client.on_enumerated = on_enumerated
-    client.on_property_read = on_property_read
-    client.on_property_written = on_property_written
-    client.on_property_subscribed = on_property_subscribed
-    client.on_property_unsubscribed = on_property_unsubscribed
-    client.on_property_updated = on_property_updated
-    client.on_disconnected = on_disconnected
-    client.on_error = on_error
+    client.set_callbacks(callbacks)
     client.connect('localhost')
-    print("HELLOOO?")
     time.sleep(2)
     client.subscribe_to_property('demo.inv.3136')
     time.sleep(10)

@@ -130,14 +130,14 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def encode_describe_frame(device_access_id, device_id, flags):
         frame = 'DESCRIBE\n'
-        if flags is SIDescriptionFlags:
+        if isinstance(flags, SIDescriptionFlags):
             frame += 'flags:'
             if flags & SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION:
                 frame += 'IncludeAccessInformation,'
-            if flags & SIDescriptionFlags.INCLUDE_ACCESS_DETAILS:
-                frame += 'IncludeAccessDetails,'
-            if flags & SIDescriptionFlags.INCLUDE_DEVICE_DETAILS:
-                frame += 'IncludeDeviceDetails,'
+            if flags & SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION:
+                frame += 'IncludeDeviceInformation,'
+            if flags & SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION:
+                frame += 'IncludePropertyInformation,'
             if flags & SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION:
                 frame += 'IncludeDriverInformation,'
             frame = frame[:-1]
@@ -507,7 +507,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         """
 
         self.__ensure_in_state(SIConnectionState.CONNECTED)
-        self.__state = SIConnectionState.CLOSED
+        self.__state = SIConnectionState.DISCONNECTED
         self.__ws.close()
 
     def __ensure_in_state(self, state):
@@ -527,8 +527,6 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
     This client uses an asynchronous model which has the disadvantage to be harder to use than the synchronous version. The advantages are that long operations do not block the
     main thread as all results are reported using callbacks, device message indications are supported and subscriptions to property changes are possible.
-
-    TODO: Documentation is missing.
     """
 
     def __init__(self):
@@ -574,6 +572,22 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             self.__thread.start()
         else:
             self.__ws.run_forever()
+
+    def set_callbacks(self, callbacks):
+        if isinstance(callbacks, SIAsyncGatewayClientCallbacks):
+            self.on_connected = callbacks.on_connected
+            self.on_disconnected = callbacks.on_disconnected
+            self.on_error = callbacks.on_error
+            self.on_enumerated = callbacks.on_enumerated
+            self.on_description = callbacks.on_description
+            self.on_property_read = callbacks.on_property_read
+            self.on_property_written = callbacks.on_property_written
+            self.on_property_subscribed = callbacks.on_property_subscribed
+            self.on_property_unsubscribed = callbacks.on_property_unsubscribed
+            self.on_property_updated = callbacks.on_property_updated
+            self.on_datalog_read = callbacks.on_datalog_read
+            self.on_device_message = callbacks.on_device_message
+            self.on_messages_read = callbacks.on_messages_read
 
     def state(self):
         return self.__state
@@ -650,37 +664,37 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     if callable(self.on_enumerated):
                         self.on_enumerated(status, device_count)
                 elif command == 'DESCRIPTION':
-                    status, id, description = super().decode_description_frame(message)
+                    status, id_, description = super().decode_description_frame(message)
                     if callable(self.on_description):
-                        self.on_description(status, id, description)
+                        self.on_description(status, id_, description)
                 elif command == 'PROPERTY READ':
-                    status, id, value = super().decode_property_read_frame(message)
+                    status, id_, value = super().decode_property_read_frame(message)
                     if callable(self.on_property_read):
-                        self.on_property_read(status, id, value)
+                        self.on_property_read(status, id_, value)
                 elif command == 'PROPERTY WRITTEN':
-                    status, id = super().decode_property_written_frame(message)
+                    status, id_ = super().decode_property_written_frame(message)
                     if callable(self.on_property_written):
-                        self.on_property_written(status, id)
+                        self.on_property_written(status, id_)
                 elif command == 'PROPERTY SUBSCRIBED':
-                    status, id = super().decode_property_subscribed_frame(message)
+                    status, id_ = super().decode_property_subscribed_frame(message)
                     if callable(self.on_property_subscribed):
-                        self.on_property_subscribed(status, id)
+                        self.on_property_subscribed(status, id_)
                 elif command == 'PROPERTY UNSUBSCRIBED':
-                    status, id = super().decode_property_unsubscribed_frame(message)
+                    status, id_ = super().decode_property_unsubscribed_frame(message)
                     if callable(self.on_property_unsubscribed):
-                        self.on_property_unsubscribed(status, id)
+                        self.on_property_unsubscribed(status, id_)
                 elif command == 'PROPERTY UPDATE':
-                    id, value = super().decode_property_update_frame(message)
+                    id_, value = super().decode_property_update_frame(message)
                     if callable(self.on_property_updated):
-                        self.on_property_updated(id, value)
+                        self.on_property_updated(id_, value)
                 elif command == 'DATALOG READ':
                     status, id_, count, values = super().decode_datalog_read_frame(message)
                     if callable(self.on_datalog_read):
                         self.on_datalog_read(status, id_, count, values)
                 elif command == 'DEVICE MESSAGE':
-                    id, message_id, message = super().decode_device_message_frame(message)
+                    id_, message_id, message = super().decode_device_message_frame(message)
                     if callable(self.on_device_message):
-                        self.on_device_message(id, message_id, message)
+                        self.on_device_message(id_, message_id, message)
                 elif command == 'MESSAGES READ':
                     status, count, messages = super().decode_messages_read_frame(message)
                     if callable(self.on_messages_read):
@@ -702,3 +716,44 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         if callable(self.on_disconnected):
             self.on_disconnected()
         self.__thread.join()
+
+
+class SIAsyncGatewayClientCallbacks:
+    def on_connected(self, access_level, gateway_version):
+        pass
+
+    def on_disconnected(self):
+        pass
+
+    def on_error(self, reason):
+        pass
+
+    def on_enumerated(self, status, device_count):
+        pass
+
+    def on_description(self, status, id_, description):
+        pass
+
+    def on_property_read(self, status, property_id, value):
+        pass
+
+    def on_property_written(self, status, property_id):
+        pass
+
+    def on_property_subscribed(self, status, property_id):
+        pass
+
+    def on_property_unsubscribed(self, status, property_id):
+        pass
+
+    def on_property_updated(self, property_id, value):
+        pass
+
+    def on_datalog_read(self, status, property_id, count, values):
+        pass
+
+    def on_device_message(self, id_, message_id, message):
+        pass
+
+    def on_messages_read(self, status, count, messages):
+        pass
