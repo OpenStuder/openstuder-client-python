@@ -20,7 +20,7 @@ class MyAsyncCallbacks(SIAsyncGatewayClientCallbacks):
         print(f'ENUMERATED status={status}, count={device_count}')
 
     def on_description(self, status, id_, description):
-        super().on_description(status, id_, description)
+        pass
 
     def on_property_read(self, status, property_id, value):
         print(f'PROPERTY READ status={status}, id={property_id}, value={value}')
@@ -40,8 +40,8 @@ class MyAsyncCallbacks(SIAsyncGatewayClientCallbacks):
     def on_datalog_read_csv(self, status, property_id, count, values):
         print(f'DATALOG READ status={status}, property_id={property_id}, values={values}')
 
-    def on_device_message(self, id_, message_id, message):
-        print(f'DEVICE MESSAGE id={id}, message_id={message_id}, message={message}')
+    def on_device_message(self, message):
+        print(f'DEVICE MESSAGE timestamp={message.timestamp}, access_id={message.access_id}, device_id={message.device_id}, message_id={message.message_id}, message={message.message}')
 
     def on_messages_read(self, status, count, messages):
         print(f'MESSAGE READ status={status}, count={count}, messages={messages}')
@@ -53,5 +53,7 @@ callbacks = MyAsyncCallbacks()
 if __name__ == "__main__":
     client.set_callbacks(callbacks)
     client.connect('localhost')
-    time.sleep(10)
+    time.sleep(2)
+    client.write_property('demo.inv.1415')
+    time.sleep(100)
     client.disconnect()

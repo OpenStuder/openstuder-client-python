@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, List
 from enum import Enum, Flag, auto
 from threading import Thread
 import datetime
@@ -132,6 +132,42 @@ class SIProtocolError(IOError):
         :return: Reason for the error.
         """
         return super(SIProtocolError, self).args[0]
+
+
+class SIDeviceMessage:
+    """
+    The SIDeviceMessage class represents a message a device connected to the OpenStuder gateway has broadcast.
+    """
+    def __init__(self, access_id: str, device_id: str, message_id: str, message: str, timestamp: datetime.datetime):
+        self.timestamp = timestamp
+        """
+        Timestamp when the device message was received by the gateway.
+        """
+
+        self.access_id = access_id
+        """
+        ID of the device access driver that received the message.
+        """
+
+        self.device_id = device_id
+        """
+        ID of the device that broadcast the message.
+        """
+
+        self.message_id = message_id
+        """
+        Message ID.
+        """
+
+        self.message = message
+        """
+        String representation of the message.
+        
+        """
+
+    @staticmethod
+    def from_dict(d: dict) -> SIDeviceMessage:
+        return SIDeviceMessage(d['access_id'], d['device_id'], d['message_id'], d['message'], datetime.datetime.fromisoformat(d['timestamp']))
 
 
 class _SIAbstractGatewayClient:
@@ -320,16 +356,12 @@ class _SIAbstractGatewayClient:
         return frame
 
     @staticmethod
-    def decode_messages_read_frame(frame: str) -> Tuple[SIStatus, int, list]:
+    def decode_messages_read_frame(frame: str) -> Tuple[SIStatus, int, List[SIDeviceMessage]]:
         command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'MESSAGES READ' and 'status' in headers and 'count' in headers:
             status = SIStatus.from_string(headers['status'])
             if status == SIStatus.SUCCESS:
-                messages = json.loads(body)
-                if isinstance(messages, list):
-                    for message in messages:
-                        if 'timestamp' in message:
-                            message['timestamp'] = datetime.datetime.fromisoformat(message['timestamp'])
+                messages = json.loads(body, object_hook=SIDeviceMessage.from_dict)
                 return status, headers['count'], messages
             else:
                 return status, headers['count'], []
@@ -339,10 +371,10 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error during description')
 
     @staticmethod
-    def decode_device_message_frame(frame: str) -> Tuple[str, str, str]:
+    def decode_device_message_frame(frame: str) -> SIDeviceMessage:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
-        if command == 'DEVICE MESSAGE' and 'access_id' in headers and 'device_id' in headers and 'message_id' in headers and 'message' in headers:
-            return '{access_id}.{device_id}'.format(access_id=headers["access_id"], device_id=headers["device_id"]), headers['message_id'], headers['message']
+        if command == 'DEVICE MESSAGE' and 'access_id' in headers and 'device_id' in headers and 'message_id' in headers and 'message' in headers and 'timestamp' in headers:
+            return SIDeviceMessage.from_dict(headers)
         elif command == 'ERROR':
             raise SIProtocolError(headers['reason'])
         else:
@@ -364,8 +396,8 @@ class _SIAbstractGatewayClient:
         line = 1
         while lines[line] and line < len(lines):
             components = lines[line].split(':')
-            if len(components) == 2:
-                headers[components[0]] = components[1]
+            if len(components) >= 2:
+                headers[components[0]] = ':'.join(components[1:])
             line += 1
         line += 1
 
@@ -554,7 +586,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         # Wait for DATALOG READ message, decode it and return data.
         return super(SIGatewayClient, self).decode_datalog_read_frame(self.__receive_frame_until_commands(['DATALOG READ', 'ERROR']))
 
-    def read_messages(self, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> Tuple[SIStatus, int, list]:
+    def read_messages(self, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> Tuple[SIStatus, int, List[SIDeviceMessage]]:
         """
         The read_messages method can be used to retrieve all or a subset of stored messages send by devices on all buses in the past from the gateway.
 
@@ -638,10 +670,10 @@ class SIAsyncGatewayClientCallbacks:
     def on_datalog_read_csv(self, status: SIStatus, property_id: str, count: int, values: str) -> None:
         pass
 
-    def on_device_message(self, id_: str, message_id: str, message: str) -> None:
+    def on_device_message(self, message: SIDeviceMessage) -> None:
         pass
 
-    def on_messages_read(self, status: SIStatus, count: int, messages: list) -> None:
+    def on_messages_read(self, status: SIStatus, count: int, messages: List[SIDeviceMessage]) -> None:
         pass
 
 
@@ -743,14 +775,14 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         the date and time in ISO 8601 extended format and the second column contains the actual values.
         """
 
-        self.on_device_message: Optional[Callable[[str, str, str], None]] = None
+        self.on_device_message: Optional[Callable[[SIDeviceMessage], None]] = None
         """
         This callback is called whenever the gateway send a device message indication.
         
-        The callback takes three parameters: 1: ID of the device that send the message, 2: ID of the message itself, 3: String representation of the message if available.
+        The callback takes one parameter, the device message.
         """
 
-        self.on_messages_read: Optional[Callable[[str, Optional[int], Optional[list]], None]] = None
+        self.on_messages_read: Optional[Callable[[str, Optional[int], List[SIDeviceMessage]], None]] = None
         """
         Called when the gateway returned the status of the read messages operation using the read_messages() method.
 
@@ -1060,9 +1092,9 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     if callable(self.on_datalog_read_csv):
                         self.on_datalog_read_csv(status, id_, count, values)
                 elif command == 'DEVICE MESSAGE':
-                    id_, message_id, frame = super(SIAsyncGatewayClient, self).decode_device_message_frame(frame)
+                    message = super(SIAsyncGatewayClient, self).decode_device_message_frame(frame)
                     if callable(self.on_device_message):
-                        self.on_device_message(id_, message_id, frame)
+                        self.on_device_message(message)
                 elif command == 'MESSAGES READ':
                     status, count, messages = super(SIAsyncGatewayClient, self).decode_messages_read_frame(frame)
                     if callable(self.on_messages_read):
