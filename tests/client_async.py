@@ -53,7 +53,5 @@ callbacks = MyAsyncCallbacks()
 if __name__ == "__main__":
     client.set_callbacks(callbacks)
     client.connect('localhost')
-    time.sleep(2)
-    client.subscribe_to_property('demo.inv.3136')
     time.sleep(10)
     client.disconnect()
