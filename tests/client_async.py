@@ -1,4 +1,4 @@
-from siclient import SIAsyncGatewayClient, SIAsyncGatewayClientCallbacks
+from openstuder import SIAsyncGatewayClient, SIAsyncGatewayClientCallbacks
 import time
 
 
@@ -37,7 +37,7 @@ class MyAsyncCallbacks(SIAsyncGatewayClientCallbacks):
     def on_property_updated(self, property_id, value):
         print(f'PROPERTY UPDATED id={property_id}, value={value}')
 
-    def on_datalog_read(self, status, property_id, count, values):
+    def on_datalog_read_csv(self, status, property_id, count, values):
         print(f'DATALOG READ status={status}, property_id={property_id}, values={values}')
 
     def on_device_message(self, id_, message_id, message):

@@ -1,4 +1,4 @@
-from siclient import SIGatewayClient, SIDescriptionFlags
+from openstuder import SIGatewayClient, SIDescriptionFlags
 
 if __name__ == "__main__":
     # Establish connection.
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     print(f'WRITE PROPERTY -> PROPERTY WRITTEN: status = {status}, id = {id_}')
 
     # Read datalog.
-    status, id_, count, values = client.read_datalog('demo.inv.3136')
+    status, id_, count, values = client.read_datalog_csv('demo.inv.3136')
     print(f'READ DATALOG -> DATALOG READ: status = {status}, id = {id_}, count = {count}, values = {values}')
 
     # Read messages.
