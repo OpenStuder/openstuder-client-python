@@ -341,7 +341,7 @@ class _SIAbstractGatewayClient:
         elif command == 'ERROR':
             raise SIProtocolError(headers['reason'])
         else:
-            raise SIProtocolError('unknown error receiving property update')
+            raise SIProtocolError('unknown error receiving datalog read')
 
     @staticmethod
     def encode_read_messages_frame(from_: datetime.datetime, to: datetime.datetime, limit: int) -> str:
@@ -362,7 +362,7 @@ class _SIAbstractGatewayClient:
             status = SIStatus.from_string(headers['status'])
             if status == SIStatus.SUCCESS:
                 messages = json.loads(body, object_hook=SIDeviceMessage.from_dict)
-                return status, headers['count'], messages
+                return status, int(headers['count']), messages
             else:
                 return status, headers['count'], []
         elif command == 'ERROR':
