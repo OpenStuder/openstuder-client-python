@@ -1,10 +1,10 @@
 from __future__ import annotations
-import websocket
-import json
+from typing import Callable, Optional, Tuple
 from enum import Enum, Flag, auto
 from threading import Thread
 import datetime
-from typing import Callable, Optional, Tuple
+import json
+import websocket
 
 
 class SIStatus(Enum):
@@ -123,7 +123,7 @@ class SIProtocolError(IOError):
     """
 
     def __init__(self, message):
-        super().__init__(message)
+        super(SIProtocolError, self).__init__(message)
 
     def reason(self) -> str:
         """
@@ -131,12 +131,12 @@ class SIProtocolError(IOError):
 
         :return: Reason for the error.
         """
-        return super().args[0]
+        return super(SIProtocolError, self).args[0]
 
 
 class _SIAbstractGatewayClient:
     def __init__(self):
-        pass
+        super(_SIAbstractGatewayClient, self).__init__()
 
     @staticmethod
     def encode_authorize_frame_without_credentials() -> str:
@@ -383,7 +383,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
     """
 
     def __init__(self):
-        super().__init__()
+        super(SIGatewayClient, self).__init__()
         self.__state: SIConnectionState = SIConnectionState.DISCONNECTED
         self.__ws: Optional[websocket.WebSocket] = None
         self.__access_level: SIAccessLevel = SIAccessLevel.NONE
@@ -413,11 +413,11 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         # Authorize client.
         self.__state = SIConnectionState.AUTHORIZING
         if user is None or password is None:
-            self.__ws.send(super().encode_authorize_frame_without_credentials())
+            self.__ws.send(super(SIGatewayClient, self).encode_authorize_frame_without_credentials())
         else:
-            self.__ws.send(super().encode_authorize_frame_with_credentials(user, password))
+            self.__ws.send(super(SIGatewayClient, self).encode_authorize_frame_with_credentials(user, password))
         try:
-            self.__access_level, self.__gateway_version = super().decode_authorized_frame(self.__ws.recv())
+            self.__access_level, self.__gateway_version = super(SIGatewayClient, self).decode_authorized_frame(self.__ws.recv())
         except ConnectionRefusedError as exception:
             self.__state = SIConnectionState.DISCONNECTED
             raise SIProtocolError('WebSocket connection refused')
@@ -467,10 +467,10 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send ENUMERATE message to gateway.
-        self.__ws.send(super().encode_enumerate_frame())
+        self.__ws.send(super(SIGatewayClient, self).encode_enumerate_frame())
 
         # Wait for ENUMERATED message, decode it and return data.
-        return super().decode_enumerated_frame(self.__receive_frame_until_commands(['ENUMERATED', 'ERROR']))
+        return super(SIGatewayClient, self).decode_enumerated_frame(self.__receive_frame_until_commands(['ENUMERATED', 'ERROR']))
 
     def describe(self, device_access_id: str = None, device_id: str = None, flags: SIDescriptionFlags = None) -> Tuple[SIStatus, Optional[str], object]:
         """
@@ -489,10 +489,10 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send DESCRIBE message to gateway.
-        self.__ws.send(super().encode_describe_frame(device_access_id, device_id, flags))
+        self.__ws.send(super(SIGatewayClient, self).encode_describe_frame(device_access_id, device_id, flags))
 
         # Wait for DESCRIPTION message, decode it and return data.
-        return super().decode_description_frame(self.__receive_frame_until_commands(['DESCRIPTION', 'ERROR']))
+        return super(SIGatewayClient, self).decode_description_frame(self.__receive_frame_until_commands(['DESCRIPTION', 'ERROR']))
 
     def read_property(self, property_id: str) -> Tuple[SIStatus, str, Optional[any]]:
         """
@@ -506,10 +506,10 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send READ PROPERTY message to gateway.
-        self.__ws.send(super().encode_read_property_frame(property_id))
+        self.__ws.send(super(SIGatewayClient, self).encode_read_property_frame(property_id))
 
         # Wait for PROPERTY READ message, decode it and return data.
-        return super().decode_property_read_frame(self.__receive_frame_until_commands(['PROPERTY READ', 'ERROR']))
+        return super(SIGatewayClient, self).decode_property_read_frame(self.__receive_frame_until_commands(['PROPERTY READ', 'ERROR']))
 
     def write_property(self, property_id: str, value: any = None) -> Tuple[SIStatus, str]:
         """
@@ -528,10 +528,10 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send WRITE PROPERTY message to gateway.
-        self.__ws.send(super().encode_write_property_frame(property_id, value))
+        self.__ws.send(super(SIGatewayClient, self).encode_write_property_frame(property_id, value))
 
         # Wait for PROPERTY WRITTEN message, decode it and return data.
-        return super().decode_property_written_frame(self.__receive_frame_until_commands(['PROPERTY WRITTEN', 'ERROR']))
+        return super(SIGatewayClient, self).decode_property_written_frame(self.__receive_frame_until_commands(['PROPERTY WRITTEN', 'ERROR']))
 
     def read_datalog_csv(self, property_id: str, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> Tuple[SIStatus, str, int, str]:
         """
@@ -549,10 +549,10 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send READ DATALOG message to gateway.
-        self.__ws.send(super().encode_read_datalog_frame(property_id, from_, to, limit))
+        self.__ws.send(super(SIGatewayClient, self).encode_read_datalog_frame(property_id, from_, to, limit))
 
         # Wait for DATALOG READ message, decode it and return data.
-        return super().decode_datalog_read_frame(self.__receive_frame_until_commands(['DATALOG READ', 'ERROR']))
+        return super(SIGatewayClient, self).decode_datalog_read_frame(self.__receive_frame_until_commands(['DATALOG READ', 'ERROR']))
 
     def read_messages(self, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> Tuple[SIStatus, int, list]:
         """
@@ -568,10 +568,10 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send READ MESSAGES message to gateway.
-        self.__ws.send(super().encode_read_messages_frame(from_, to, limit))
+        self.__ws.send(super(SIGatewayClient, self).encode_read_messages_frame(from_, to, limit))
 
         # Wait for MESSAGES READ message, decode it and return data.
-        return super().decode_messages_read_frame(self.__receive_frame_until_commands(['MESSAGES READ', 'ERROR']))
+        return super(SIGatewayClient, self).decode_messages_read_frame(self.__receive_frame_until_commands(['MESSAGES READ', 'ERROR']))
 
     def disconnect(self) -> None:
         """
@@ -594,7 +594,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
     def __receive_frame_until_commands(self, commands: list) -> str:
         while True:
             frame = self.__ws.recv()
-            if super().peek_frame_command(frame) in commands:
+            if super(SIGatewayClient, self).peek_frame_command(frame) in commands:
                 return frame
 
 
@@ -654,7 +654,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
     """
 
     def __init__(self):
-        super().__init__()
+        super(SIAsyncGatewayClient, self).__init__()
         self.__state: SIConnectionState = SIConnectionState.DISCONNECTED
         self.__ws: Optional[websocket.WebSocketApp] = None
         self.__thread: Optional[Thread] = None
@@ -857,7 +857,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send ENUMERATE message to gateway.
-        self.__ws.send(super().encode_enumerate_frame())
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_enumerate_frame())
 
     def describe(self, device_access_id: str = None, device_id: str = None, flags: SIDescriptionFlags = None) -> None:
         """
@@ -877,7 +877,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send DESCRIBE message to gateway.
-        self.__ws.send(super().encode_describe_frame(device_access_id, device_id, flags))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_describe_frame(device_access_id, device_id, flags))
 
     def read_property(self, property_id: str) -> None:
         """
@@ -892,7 +892,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send READ PROPERTY message to gateway.
-        self.__ws.send(super().encode_read_property_frame(property_id))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_property_frame(property_id))
 
     def write_property(self, property_id: str, value: any = None) -> None:
         """
@@ -912,7 +912,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send WRITE PROPERTY message to gateway.
-        self.__ws.send(super().encode_write_property_frame(property_id, value))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_write_property_frame(property_id, value))
 
     def subscribe_to_property(self, property_id: str) -> None:
         """
@@ -927,7 +927,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send SUBSCRIBE PROPERTY message to gateway.
-        self.__ws.send(super().encode_subscribe_property_frame(property_id))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_subscribe_property_frame(property_id))
 
     def unsubscribe_from_property(self, property_id: str) -> None:
         """
@@ -942,7 +942,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send UNSUBSCRIBE PROPERTY message to gateway.
-        self.__ws.send(super().encode_unsubscribe_property_frame(property_id))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_unsubscribe_property_frame(property_id))
 
     def read_datalog(self, property_id: str, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> None:
         """
@@ -960,7 +960,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send READ DATALOG message to gateway.
-        self.__ws.send(super().encode_read_datalog_frame(property_id, from_, to, limit))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_datalog_frame(property_id, from_, to, limit))
 
     def read_messages(self, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> None:
         """
@@ -977,7 +977,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send READ MESSAGES message to gateway.
-        self.__ws.send(super().encode_read_messages_frame(from_, to, limit))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_messages_frame(from_, to, limit))
 
     def disconnect(self) -> None:
         """
@@ -1000,19 +1000,19 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
         # Encode and send AUTHORIZE message to gateway.
         if self.__user is None or self.__password is None:
-            self.__ws.send(super().encode_authorize_frame_without_credentials())
+            self.__ws.send(super(SIAsyncGatewayClient, self).encode_authorize_frame_without_credentials())
         else:
-            self.__ws.send(super().encode_authorize_frame_with_credentials(self.__user, self.__password))
+            self.__ws.send(super(SIAsyncGatewayClient, self).encode_authorize_frame_with_credentials(self.__user, self.__password))
 
     def __on_message(self, frame: str) -> None:
 
         # Determine the actual command.
-        command = super().peek_frame_command(frame)
+        command = super(SIAsyncGatewayClient, self).peek_frame_command(frame)
 
         try:
             # In AUTHORIZE state we only handle AUTHORIZED messages.
             if self.__state == SIConnectionState.AUTHORIZING:
-                self.__access_level, self.__gateway_version = super().decode_authorized_frame(frame)
+                self.__access_level, self.__gateway_version = super(SIAsyncGatewayClient, self).decode_authorized_frame(frame)
 
                 # Change state to CONNECTED.
                 self.__state = SIConnectionState.CONNECTED
@@ -1025,46 +1025,46 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             else:
                 if command == 'ERROR':
                     if callable(self.on_error):
-                        _, headers, _ = super().decode_frame(frame)
+                        _, headers, _ = super(SIAsyncGatewayClient, self).decode_frame(frame)
                         self.on_error(SIProtocolError(headers['reason']))
                 elif command == 'ENUMERATED':
-                    status, device_count = super().decode_enumerated_frame(frame)
+                    status, device_count = super(SIAsyncGatewayClient, self).decode_enumerated_frame(frame)
                     if callable(self.on_enumerated):
                         self.on_enumerated(status, device_count)
                 elif command == 'DESCRIPTION':
-                    status, id_, description = super().decode_description_frame(frame)
+                    status, id_, description = super(SIAsyncGatewayClient, self).decode_description_frame(frame)
                     if callable(self.on_description):
                         self.on_description(status, id_, description)
                 elif command == 'PROPERTY READ':
-                    status, id_, value = super().decode_property_read_frame(frame)
+                    status, id_, value = super(SIAsyncGatewayClient, self).decode_property_read_frame(frame)
                     if callable(self.on_property_read):
                         self.on_property_read(status, id_, value)
                 elif command == 'PROPERTY WRITTEN':
-                    status, id_ = super().decode_property_written_frame(frame)
+                    status, id_ = super(SIAsyncGatewayClient, self).decode_property_written_frame(frame)
                     if callable(self.on_property_written):
                         self.on_property_written(status, id_)
                 elif command == 'PROPERTY SUBSCRIBED':
-                    status, id_ = super().decode_property_subscribed_frame(frame)
+                    status, id_ = super(SIAsyncGatewayClient, self).decode_property_subscribed_frame(frame)
                     if callable(self.on_property_subscribed):
                         self.on_property_subscribed(status, id_)
                 elif command == 'PROPERTY UNSUBSCRIBED':
-                    status, id_ = super().decode_property_unsubscribed_frame(frame)
+                    status, id_ = super(SIAsyncGatewayClient, self).decode_property_unsubscribed_frame(frame)
                     if callable(self.on_property_unsubscribed):
                         self.on_property_unsubscribed(status, id_)
                 elif command == 'PROPERTY UPDATE':
-                    id_, value = super().decode_property_update_frame(frame)
+                    id_, value = super(SIAsyncGatewayClient, self).decode_property_update_frame(frame)
                     if callable(self.on_property_updated):
                         self.on_property_updated(id_, value)
                 elif command == 'DATALOG READ':
-                    status, id_, count, values = super().decode_datalog_read_frame(frame)
+                    status, id_, count, values = super(SIAsyncGatewayClient, self).decode_datalog_read_frame(frame)
                     if callable(self.on_datalog_read_csv):
                         self.on_datalog_read_csv(status, id_, count, values)
                 elif command == 'DEVICE MESSAGE':
-                    id_, message_id, frame = super().decode_device_message_frame(frame)
+                    id_, message_id, frame = super(SIAsyncGatewayClient, self).decode_device_message_frame(frame)
                     if callable(self.on_device_message):
                         self.on_device_message(id_, message_id, frame)
                 elif command == 'MESSAGES READ':
-                    status, count, messages = super().decode_messages_read_frame(frame)
+                    status, count, messages = super(SIAsyncGatewayClient, self).decode_messages_read_frame(frame)
                     if callable(self.on_messages_read):
                         self.on_messages_read(status, count, messages)
                 else:
