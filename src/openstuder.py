@@ -12,12 +12,12 @@ class SIStatus(Enum):
     Status of operations on the OpenStuder gateway.
 
     - **SIStatus.SUCCESS**: Operation was successfully completed.
-    - **SIStatus.IN_PROGRESS**: Operation is already in progress or another operation is locking the resource.
+    - **SIStatus.IN_PROGRESS**: Operation is already in progress or another operation is occupying the resource.
     - **SIStatus.ERROR**: General (unspecified) error.
-    - **SIStatus.NO_PROPERTY**: The property does not exist or access level does not allow to access the property.
+    - **SIStatus.NO_PROPERTY**: The property does not exist or the user's access level does not allow to access the property.
     - **SIStatus.NO_DEVICE**: The device does not exist.
     - **SIStatus.NO_DEVICE_ACCESS**: The device access instance does not exist.
-    - **SIStatus.TIMEOUT**: A timeout occurred when executing the operation.
+    - **SIStatus.TIMEOUT**: A timeout occurred when waiting for the completion of the operation.
     - **SIStatus.INVALID_VALUE**: A invalid value was passed.
     """
 
@@ -54,12 +54,12 @@ class SIStatus(Enum):
 
 class SIConnectionState(Enum):
     """
-    State of the connection to the OpenStuder gateway of a client.
+    State of the connection to the OpenStuder gateway.
 
-    - **SIConnectionState.DISCONNECTED**: The client is not connected at all.
-    - **SIConnectionState.CONNECTING**: The client tries to connect to the WebSocket server on the gateway.
-    - **SIConnectionState.AUTHORIZING**: The WebSocket connection to the gateway has been established and the user is actually authorized.
-    - **SIConnectionState.CONNECTED**: The WebSocket connection is established and the user is authorized, the client is ready to be used.
+    - **SIConnectionState.DISCONNECTED**: The client is not connected.
+    - **SIConnectionState.CONNECTING**: The client is establishing the WebSocket connection to the gateway.
+    - **SIConnectionState.AUTHORIZING**: The WebSocket connection to the gateway has been established and the client is authorizing.
+    - **SIConnectionState.CONNECTED**: The WebSocket connection is established and the client is authorized, ready to use.
     """
 
     DISCONNECTED = auto()
@@ -76,14 +76,14 @@ class SIAccessLevel(Enum):
     - **BASIC**: Basic access to device information properties (configuration excluded).
     - **INSTALLER**: Basic access + additional access to most common configuration properties.
     - **EXPERT**: Installer + additional advanced configuration properties.
-    - **QSP**: Expert and all configuration and service properties.
+    - **QUALIFIED_SERVICE_PERSONNEL**: Expert and all configuration and service properties only for qualified service personnel.
     """
 
     NONE = auto()
     BASIC = auto()
     INSTALLER = auto()
     EXPERT = auto()
-    QSP = auto()
+    QUALIFIED_SERVICE_PERSONNEL = auto()
 
     @staticmethod
     def from_string(string: str) -> SIAccessLevel:
@@ -96,7 +96,7 @@ class SIAccessLevel(Enum):
         elif string == 'Expert':
             return SIAccessLevel.EXPERT
         elif string == 'QSP':
-            return SIAccessLevel.QSP
+            return SIAccessLevel.QUALIFIED_SERVICE_PERSONNEL
         else:
             return SIAccessLevel.NONE
 
@@ -108,7 +108,7 @@ class SIDescriptionFlags(Flag):
     - **SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION**: Includes device access instances information.
     - **SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION**: Include device information.
     - **SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION**: Include device property information.
-    - **SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION**: Include driver information.
+    - **SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION**: Include device access driver information.
     """
 
     INCLUDE_ACCESS_INFORMATION = auto()
@@ -119,7 +119,7 @@ class SIDescriptionFlags(Flag):
 
 class SIProtocolError(IOError):
     """
-    Class for all OpenStuder communication errors.
+    Class for reporting all OpenStuder protocol errors.
     """
 
     def __init__(self, message):
@@ -162,7 +162,6 @@ class SIDeviceMessage:
         self.message = message
         """
         String representation of the message.
-        
         """
 
     @staticmethod
@@ -197,7 +196,7 @@ class _SIAbstractGatewayClient:
 
     @staticmethod
     def encode_enumerate_frame() -> str:
-        return 'ENUMERATE'
+        return 'ENUMERATE\n\n'
 
     @staticmethod
     def decode_enumerated_frame(frame: str) -> Tuple[SIStatus, int]:
@@ -324,10 +323,8 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def encode_read_datalog_frame(property_id: str, from_: datetime.datetime, to: datetime.datetime, limit: int) -> str:
         frame = 'READ DATALOG\nid:{property_id}\n'.format(property_id=property_id)
-        if from_ is not None and isinstance(from_, datetime.datetime):
-            frame += 'from:{from_}\n'.format(from_=from_.replace(microsecond=0).isoformat())
-        if to is not None and isinstance(to, datetime.datetime):
-            frame += 'to:{to}\n'.format(to=to.replace(microsecond=0).isoformat())
+        frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('from', from_)
+        frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('to', to)
         if limit is not None:
             frame += 'limit:{limit}'.format(limit=limit)
         frame += '\n'
@@ -346,10 +343,8 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def encode_read_messages_frame(from_: datetime.datetime, to: datetime.datetime, limit: int) -> str:
         frame = 'READ MESSAGES\n'
-        if from_ is not None and isinstance(from_, datetime.datetime):
-            frame += 'from:{from_}\n'.format(from_=from_.replace(microsecond=0).isoformat())
-        if to is not None and isinstance(to, datetime.datetime):
-            frame += 'to:{to}\n'.format(to=to.replace(microsecond=0).isoformat())
+        frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('from', from_)
+        frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('to', to)
         if limit is not None:
             frame += 'limit:{limit}'.format(limit=limit)
         frame += '\n'
@@ -405,13 +400,20 @@ class _SIAbstractGatewayClient:
 
         return command, headers, body
 
+    @staticmethod
+    def get_timestamp_header_if_present(key: str, timestamp: Optional[datetime.datetime]):
+        if timestamp is not None and isinstance(timestamp, datetime.datetime):
+            return '{key}}:{timestamp}\n'.format(key=key, timestamp=timestamp.replace(microsecond=0).isoformat())
+        else:
+            return ''
+
 
 class SIGatewayClient(_SIAbstractGatewayClient):
     """
     Simple, synchronous (blocking) OpenStuder gateway client.
 
-    This client uses a synchronous model which has the advantage to be much simpler to use than the asynchronous version. The drawback is that device message indications are
-    ignored by this client and subscriptions to property changes are not possible.
+    This client uses a synchronous model which has the advantage to be much simpler to use than the asynchronous version SIAsyncGatewayClient. The drawback is that device message
+    indications are ignored by this client and subscriptions to property changes are not possible.
     """
 
     def __init__(self):
@@ -450,7 +452,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
             self.__ws.send(super(SIGatewayClient, self).encode_authorize_frame_with_credentials(user, password))
         try:
             self.__access_level, self.__gateway_version = super(SIGatewayClient, self).decode_authorized_frame(self.__ws.recv())
-        except ConnectionRefusedError as exception:
+        except ConnectionRefusedError:
             self.__state = SIConnectionState.DISCONNECTED
             raise SIProtocolError('WebSocket connection refused')
 
@@ -636,44 +638,123 @@ class SIAsyncGatewayClientCallbacks:
     IAsyncGatewayClient.set_callbacks().
     """
 
-    # TODO: Document methods.
     def on_connected(self, access_level: SIAccessLevel, gateway_version: str) -> None:
+        """
+        This method is called once the connection to the gateway could be established and the user has been successfully authorized.
+
+        :param access_level: Access level that was granted to the user during authorization.
+        :param gateway_version: Version of the OpenStuder software running on the gateway.
+        """
         pass
 
     def on_disconnected(self) -> None:
+        """
+        Called when the connection to the OpenStuder gateway has been gracefully closed by either side or the connection was lost by any other reason.
+        """
         pass
 
     def on_error(self, reason) -> None:
+        """
+        Called on severe errors.
+
+        :param reason: Exception that caused the erroneous behavior.
+        """
         pass
 
     def on_enumerated(self, status: SIStatus, device_count: int) -> None:
+        """
+        Called when the enumeration operation started using enumerate() has completed on the gateway.
+
+        The callback takes two arguments. 1: , 2: the .
+        :param status: Operation status.
+        :param device_count: Number of devices present.
+        """
         pass
 
     def on_description(self, status: SIStatus, id_: Optional[str], description: object) -> None:
+        """
+        Called when the gateway returned the description requested using the describe() method.
+
+        :param status: Status of the operation.
+        :param id_: Subject's ID.
+        :param description: Description object.
+        """
         pass
 
     def on_property_read(self, status: SIStatus, property_id: str, value: Optional[any]) -> None:
+        """
+        Called when the property read operation started using read_property() has completed on the gateway.
+
+        :param status: Status of the read operation.
+        :param property_id: ID of the property read.
+        :param value: The value read.
+        """
         pass
 
     def on_property_written(self, status: SIStatus, property_id: str) -> None:
+        """
+        Called when the property write operation started using write_property() has completed on the gateway.
+
+        :param status: Status of the write operation.
+        :param property_id: ID of the property written.
+        """
         pass
 
     def on_property_subscribed(self, status: SIStatus, property_id: str) -> None:
+        """
+        Called when the gateway returned the status of the property subscription requested using the property_subscribe() method.
+
+        :param status: The status of the subscription.
+        :param property_id: ID of the property.
+        """
         pass
 
     def on_property_unsubscribed(self, status: SIStatus, property_id: str) -> None:
+        """
+        Called when the gateway returned the status of the property unsubscription requested using the property_unsubscribe() method.
+
+        :param status: The status of the unsubscription.
+        :param property_id: ID of the property.
+        """
         pass
 
     def on_property_updated(self, property_id: str, value: any) -> None:
+        """
+        This callback is called whenever the gateway send a property update.
+
+        :param property_id: ID of the updated property.
+        :param value: The current value of the property.
+        """
         pass
 
     def on_datalog_read_csv(self, status: SIStatus, property_id: str, count: int, values: str) -> None:
+        """
+        Called when the datalog read operation started using read_datalog() has completed on the gateway. This version of the method returns the data in CSV format suitable to
+        be written to a file.
+
+        :param status: Status of the operation.
+        :param property_id: ID of the property.
+        :param count: Number of entries.
+        :param values: Properties data in CSV format whereas the first column is the date and time in ISO 8601 extended format and the second column contains the actual values.
+        """
         pass
 
     def on_device_message(self, message: SIDeviceMessage) -> None:
+        """
+        This callback is called whenever the gateway send a device message indication.
+
+        :param message: The device message received.
+        """
         pass
 
     def on_messages_read(self, status: SIStatus, count: int, messages: List[SIDeviceMessage]) -> None:
+        """
+        Called when the gateway returned the status of the read messages operation using the read_messages() method.
+
+        :param status: The status of the operation.
+        :param count: Number of messages retrieved.
+        :param messages: List of retrieved messages.
+        """
         pass
 
 
@@ -728,7 +809,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         """
         Called when the gateway returned the description requested using the describe() method.
         
-        The callback takes three parameters: 1: Status of the operation, 2: the subject's id, 3: the description object.
+        The callback takes three parameters: 1: Status of the operation, 2: the subject's ID, 3: the description object.
         """
 
         self.on_property_read: Optional[Callable[[str, str, Optional[any]], None]] = None
@@ -771,7 +852,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         Called when the datalog read operation started using read_datalog() has completed on the gateway. This version of the callback returns the data in CSV format suitable to 
         be written to a file.
         
-        The callback takes four parameters: 1: Status of the operation, 2: id of the property, 3: number of entries, 4: Properties data in CSV format whereas the first column is
+        The callback takes four parameters: 1: Status of the operation, 2: ID of the property, 3: number of entries, 4: properties data in CSV format whereas the first column is
         the date and time in ISO 8601 extended format and the second column contains the actual values.
         """
 
@@ -779,14 +860,14 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         """
         This callback is called whenever the gateway send a device message indication.
         
-        The callback takes one parameter, the device message.
+        The callback takes one parameter, the device message object.
         """
 
         self.on_messages_read: Optional[Callable[[str, Optional[int], List[SIDeviceMessage]], None]] = None
         """
         Called when the gateway returned the status of the read messages operation using the read_messages() method.
 
-        The callback takes three parameters: 1: the status of the operation, 2: the number of messages, 3: the list of retrieved messages.
+        The callback takes three parameters: 1: the status of the operation, 2: the number of messages retrieved, 3: the list of retrieved messages.
         """
 
     def connect(self, host: str, port: int = 1987, user: str = None, password: str = None, background: bool = True) -> None:
