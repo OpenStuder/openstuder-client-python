@@ -1,7 +1,6 @@
 from setuptools import setup, find_packages
 
 setup(
-	packages=find_packages('src'),
-	package_dir={'': 'src'},
+	py_modules=["openstuder"],
 	install_requires=['websocket-client>=0.57'],
 )
