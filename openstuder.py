@@ -209,8 +209,13 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error during device enumeration')
 
     @staticmethod
-    def encode_describe_frame(device_access_id: str, device_id: str, flags: SIDescriptionFlags) -> str:
+    def encode_describe_frame(device_access_id: Optional[str], device_id: Optional[str], flags: Optional[SIDescriptionFlags]) -> str:
         frame = 'DESCRIBE\n'
+        if device_access_id is not None:
+            frame += 'id:{device_access_id}'.format(device_access_id=device_access_id)
+            if device_id is not None:
+                frame += '.{device_id}'.format(device_id=device_id)
+            frame += '\n'
         if isinstance(flags, SIDescriptionFlags):
             frame += 'flags:'
             if flags & SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION:
@@ -222,11 +227,6 @@ class _SIAbstractGatewayClient:
             if flags & SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION:
                 frame += 'IncludeDriverInformation,'
             frame = frame[:-1]
-            frame += '\n'
-        if device_access_id is not None:
-            frame += 'id:{device_access_id}'.format(device_access_id=device_access_id)
-            if device_id is not None:
-                frame += '.{device_id}'.format(device_id=device_id)
             frame += '\n'
         frame += '\n'
         return frame
@@ -256,7 +256,11 @@ class _SIAbstractGatewayClient:
         if command == 'PROPERTY READ' and 'status' in headers and 'id' in headers:
             status = SIStatus.from_string(headers['status'])
             if status == SIStatus.SUCCESS and 'value' in headers:
-                return status, headers['id'], headers['value']
+                try:
+                    value = float(headers['value'])
+                except ValueError:
+                    value = headers['value']
+                return status, headers['id'], value
             else:
                 return status, headers['id'], None
         elif command == 'ERROR':
