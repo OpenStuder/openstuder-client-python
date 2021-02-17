@@ -79,7 +79,7 @@ class SIAccessLevel(Enum):
     - **QUALIFIED_SERVICE_PERSONNEL**: Expert and all configuration and service properties only for qualified service personnel.
     """
 
-    NONE = auto()
+    NONE = 0
     BASIC = auto()
     INSTALLER = auto()
     EXPERT = auto()
@@ -105,16 +105,30 @@ class SIDescriptionFlags(Flag):
     """
     Flags to control the format of the **DESCRIBE** functionality.
 
+    - **SIDescriptionFlags.NONE**: No description flags.
     - **SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION**: Includes device access instances information.
     - **SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION**: Include device information.
     - **SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION**: Include device property information.
     - **SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION**: Include device access driver information.
     """
 
+    NONE = 0
     INCLUDE_ACCESS_INFORMATION = auto()
     INCLUDE_DEVICE_INFORMATION = auto()
     INCLUDE_PROPERTY_INFORMATION = auto()
     INCLUDE_DRIVER_INFORMATION = auto()
+
+
+class SIWriteFlags(Flag):
+    """
+        Flags to control write property operation.
+
+        - **SIWriteFlags.NONE**: No write flags.
+        - **SIWriteFlags.PERMANENT**: Write the change to the persistent storage, eg the change lasts reboots.
+        """
+
+    NONE = 0
+    PERMANENT = auto()
 
 
 class SIProtocolError(IOError):
@@ -201,7 +215,7 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def decode_enumerated_frame(frame: str) -> Tuple[SIStatus, int]:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
-        if command == 'ENUMERATED':
+        if command == 'ENUMERATED' and 'status' in headers and 'device_count' in headers:
             return SIStatus.from_string(headers['status']), int(headers['device_count'])
         elif command == 'ERROR':
             raise SIProtocolError(headers['reason'])
@@ -216,7 +230,7 @@ class _SIAbstractGatewayClient:
             if device_id is not None:
                 frame += '.{device_id}'.format(device_id=device_id)
             frame += '\n'
-        if isinstance(flags, SIDescriptionFlags):
+        if flags is not None and isinstance(flags, SIDescriptionFlags):
             frame += 'flags:'
             if flags & SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION:
                 frame += 'IncludeAccessInformation,'
@@ -259,7 +273,13 @@ class _SIAbstractGatewayClient:
                 try:
                     value = float(headers['value'])
                 except ValueError:
-                    value = headers['value']
+                    string = headers['value'].lower()
+                    if string == 'true':
+                        value = True
+                    elif string == 'false':
+                        value = False
+                    else:
+                        value = string
                 return status, headers['id'], value
             else:
                 return status, headers['id'], None
@@ -269,8 +289,13 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error during property read')
 
     @staticmethod
-    def encode_write_property_frame(property_id: str, value: any) -> str:
+    def encode_write_property_frame(property_id: str, value: Optional[any], flags: Optional[SIWriteFlags]) -> str:
         frame = 'WRITE PROPERTY\nid:{property_id}\n'.format(property_id=property_id)
+        if flags is not None and isinstance(flags, SIWriteFlags):
+            frame += 'flags:'
+            if flags & SIWriteFlags.PERMANENT:
+                frame += 'Permanent'
+            frame += '\n'
         if value is not None:
             frame += 'value:{value}\n'.format(value=value)
         frame += '\n'
@@ -318,19 +343,29 @@ class _SIAbstractGatewayClient:
     def decode_property_update_frame(frame: str) -> Tuple[str, any]:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'PROPERTY UPDATE' and 'id' in headers and 'value' in headers:
-            return headers['id'], headers['value']
+            try:
+                value = float(headers['value'])
+            except ValueError:
+                string = headers['value'].lower()
+                if string == 'true':
+                    value = True
+                elif string == 'false':
+                    value = False
+                else:
+                    value = string
+            return headers['id'], value
         elif command == 'ERROR':
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error receiving property update')
 
     @staticmethod
-    def encode_read_datalog_frame(property_id: str, from_: datetime.datetime, to: datetime.datetime, limit: int) -> str:
+    def encode_read_datalog_frame(property_id: str, from_: Optional[datetime.datetime], to: Optional[datetime.datetime], limit: Optional[int]) -> str:
         frame = 'READ DATALOG\nid:{property_id}\n'.format(property_id=property_id)
         frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('from', from_)
         frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('to', to)
         if limit is not None:
-            frame += 'limit:{limit}'.format(limit=limit)
+            frame += 'limit:{limit}\n'.format(limit=limit)
         frame += '\n'
         return frame
 
@@ -345,12 +380,12 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error receiving datalog read')
 
     @staticmethod
-    def encode_read_messages_frame(from_: datetime.datetime, to: datetime.datetime, limit: int) -> str:
+    def encode_read_messages_frame(from_: Optional[datetime.datetime], to: Optional[datetime.datetime], limit: Optional[int]) -> str:
         frame = 'READ MESSAGES\n'
         frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('from', from_)
         frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('to', to)
         if limit is not None:
-            frame += 'limit:{limit}'.format(limit=limit)
+            frame += 'limit:{limit}\n'.format(limit=limit)
         frame += '\n'
         return frame
 
@@ -363,7 +398,7 @@ class _SIAbstractGatewayClient:
                 messages = json.loads(body, object_hook=SIDeviceMessage.from_dict)
                 return status, int(headers['count']), messages
             else:
-                return status, headers['count'], []
+                return status, int(headers['count']), []
         elif command == 'ERROR':
             raise SIProtocolError(headers['reason'])
         else:
@@ -385,20 +420,24 @@ class _SIAbstractGatewayClient:
 
     @staticmethod
     def decode_frame(frame: str) -> Tuple[str, dict, str]:
-        command = 'INVALID'
-        headers = {}
-
         lines = frame.split('\n')
-        if len(lines) >= 1:
-            command = lines[0]
+
+        if len(lines) < 2:
+            raise SIProtocolError('invalid frame')
+
+        command = lines[0]
 
         line = 1
-        while lines[line] and line < len(lines):
+        headers = {}
+        while line < len(lines) and lines[line]:
             components = lines[line].split(':')
             if len(components) >= 2:
                 headers[components[0]] = ':'.join(components[1:])
             line += 1
         line += 1
+
+        if line >= len(lines):
+            raise SIProtocolError('invalid frame')
 
         body = '\n'.join(lines[line:])
 
@@ -407,7 +446,7 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def get_timestamp_header_if_present(key: str, timestamp: Optional[datetime.datetime]):
         if timestamp is not None and isinstance(timestamp, datetime.datetime):
-            return '{key}}:{timestamp}\n'.format(key=key, timestamp=timestamp.replace(microsecond=0).isoformat())
+            return '{key}:{timestamp}\n'.format(key=key, timestamp=timestamp.replace(microsecond=0).isoformat())
         else:
             return ''
 
@@ -549,7 +588,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         # Wait for PROPERTY READ message, decode it and return data.
         return super(SIGatewayClient, self).decode_property_read_frame(self.__receive_frame_until_commands(['PROPERTY READ', 'ERROR']))
 
-    def write_property(self, property_id: str, value: any = None) -> Tuple[SIStatus, str]:
+    def write_property(self, property_id: str, value: any = None, flags: SIWriteFlags = None) -> Tuple[SIStatus, str]:
         """
         The write_property method is used to change the actual value of a given property. The property is identified by the property_id parameter and the new value is passed by the
         optional value parameter.
@@ -559,6 +598,8 @@ class SIGatewayClient(_SIAbstractGatewayClient):
 
         :param property_id: The ID of the property to write in the form '{device access ID}.{<device ID}.{<property ID}'.
         :param value: Optional value to write.
+        :param flags: Write flags, See SIWriteFlags for details, if not provided the flags are not send by the client and the gateway uses the default flags
+                      (SIWriteFlags.PERMANENT).
         :return: Returns two values: 1: Status of the write operation, 2: the ID of the property written.
         """
 
@@ -566,7 +607,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send WRITE PROPERTY message to gateway.
-        self.__ws.send(super(SIGatewayClient, self).encode_write_property_frame(property_id, value))
+        self.__ws.send(super(SIGatewayClient, self).encode_write_property_frame(property_id, value, flags))
 
         # Wait for PROPERTY WRITTEN message, decode it and return data.
         return super(SIGatewayClient, self).decode_property_written_frame(self.__receive_frame_until_commands(['PROPERTY WRITTEN', 'ERROR']))
@@ -1011,7 +1052,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         # Encode and send READ PROPERTY message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_property_frame(property_id))
 
-    def write_property(self, property_id: str, value: any = None) -> None:
+    def write_property(self, property_id: str, value: any = None, flags: SIWriteFlags = None) -> None:
         """
         The write_property method is used to change the actual value of a given property. The property is identified by the property_id parameter and the new value is passed by the
         optional value parameter.
@@ -1023,13 +1064,15 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
         :param property_id: The ID of the property to write in the form '{device access ID}.{<device ID}.{<property ID}'.
         :param value: Optional value to write.
+        :param flags: Write flags, See SIWriteFlags for details, if not provided the flags are not send by the client and the gateway uses the default flags
+                      (SIWriteFlags.PERMANENT).
         """
 
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send WRITE PROPERTY message to gateway.
-        self.__ws.send(super(SIAsyncGatewayClient, self).encode_write_property_frame(property_id, value))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_write_property_frame(property_id, value, flags))
 
     def subscribe_to_property(self, property_id: str) -> None:
         """
