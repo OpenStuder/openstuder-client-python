@@ -223,12 +223,14 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error during device enumeration')
 
     @staticmethod
-    def encode_describe_frame(device_access_id: Optional[str], device_id: Optional[str], flags: Optional[SIDescriptionFlags]) -> str:
+    def encode_describe_frame(device_access_id: Optional[str], device_id: Optional[str], property_id: Optional[int], flags: Optional[SIDescriptionFlags]) -> str:
         frame = 'DESCRIBE\n'
         if device_access_id is not None:
             frame += 'id:{device_access_id}'.format(device_access_id=device_access_id)
             if device_id is not None:
                 frame += '.{device_id}'.format(device_id=device_id)
+                if property_id is not None:
+                    frame += '.{property_id}'.format(property_id=property_id)
             frame += '\n'
         if flags is not None and isinstance(flags, SIDescriptionFlags):
             frame += 'flags:'
@@ -477,7 +479,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         :param user: Username send to the gateway used for authorization.
         :param password: Password send to the gateway used for authorization.
         :return: Access Level granted to the client.
-        :raises SIProtocolError: If the connection could not be established or the authorization was refused.
+        :raises SIProtocolError: If the connection could not be established, or the authorization was refused.
         """
 
         # Ensure that the client is in the DISCONNECTED state.
@@ -535,9 +537,10 @@ class SIGatewayClient(_SIAbstractGatewayClient):
     def enumerate(self) -> Tuple[SIStatus, int]:
         """
         Instructs the gateway to scan every configured and functional device access driver for new devices and remove devices that do not respond anymore. Returns the status of
-        the operation and the number of devices present.
+        the operation, and the number of devices present.
 
         :return: Returns two values. 1: operation status, 2: the number of devices present.
+        :raises SIProtocolError: On a connection, protocol of framing error.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -549,7 +552,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         # Wait for ENUMERATED message, decode it and return data.
         return super(SIGatewayClient, self).decode_enumerated_frame(self.__receive_frame_until_commands(['ENUMERATED', 'ERROR']))
 
-    def describe(self, device_access_id: str = None, device_id: str = None, flags: SIDescriptionFlags = None) -> Tuple[SIStatus, Optional[str], object]:
+    def describe(self, device_access_id: str = None, device_id: str = None, property_id: int = None, flags: SIDescriptionFlags = None) -> Tuple[SIStatus, Optional[str], object]:
         """
         This method can be used to retrieve information about the available devices and their properties from the connected gateway. Using the optional device_access_id and
         device_id parameters, the method can either request information about the whole topology, a particular device access instance, a device or a property.
@@ -557,16 +560,18 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         The flags control the level of detail in the gateway's response.
 
         :param device_access_id: Device access ID for which the description should be retrieved.
-        :param device_id: Device ID for which the description should be retrieved.
+        :param device_id: Device ID for which the description should be retrieved. Note that device_access_id must be present too.
+        :param property_id: Property ID for which the description should be retrieved. Note that device_access_id and device_id must be present too.
         :param flags: Flags to control level of detail of the response.
         :return: Returns three values. 1: Status of the operation, 2: the subject's id, 3: the description object.
+        :raises SIProtocolError: On a connection, protocol of framing error.
         """
 
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send DESCRIBE message to gateway.
-        self.__ws.send(super(SIGatewayClient, self).encode_describe_frame(device_access_id, device_id, flags))
+        self.__ws.send(super(SIGatewayClient, self).encode_describe_frame(device_access_id, device_id, property_id, flags))
 
         # Wait for DESCRIPTION message, decode it and return data.
         return super(SIGatewayClient, self).decode_description_frame(self.__receive_frame_until_commands(['DESCRIPTION', 'ERROR']))
@@ -577,6 +582,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
 
         :param property_id: The ID of the property to read in the form '{device access ID}.{device ID}.{property ID}'.
         :return: Returns three values: 1: Status of the read operation, 2: the ID of the property read, 3: the value read.
+        :raises SIProtocolError: On a connection, protocol of framing error.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -598,9 +604,10 @@ class SIGatewayClient(_SIAbstractGatewayClient):
 
         :param property_id: The ID of the property to write in the form '{device access ID}.{<device ID}.{<property ID}'.
         :param value: Optional value to write.
-        :param flags: Write flags, See SIWriteFlags for details, if not provided the flags are not send by the client and the gateway uses the default flags
+        :param flags: Write flags, See SIWriteFlags for details, if not provided the flags are not send by the client, and the gateway uses the default flags
                       (SIWriteFlags.PERMANENT).
         :return: Returns two values: 1: Status of the write operation, 2: the ID of the property written.
+        :raises SIProtocolError: On a connection, protocol of framing error.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -617,11 +624,12 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         This method is used to retrieve all or a subset of logged data of a given property from the gateway.
 
         :param property_id: Global ID of the property for which the logged data should be retrieved. It has to be in the form '{device access ID}.{device ID}.{property ID}'.
-        :param from_: Optional date and time from which the data has to be retrieved, Defaults to the begin of time.
+        :param from_: Optional date and time from which the data has to be retrieved, defaults to the oldest value logged.
         :param to: Optional date and time to which the data has to be retrieved, Defaults to the current time on the gateway.
         :param limit: Using this optional parameter you can limit the number of results retrieved in total.
         :return: Returns four values: 1: Status of the operation, 2: id of the property, 3: number of entries, 4: Properties data in CSV format whereas the first column is the
-        date and time in ISO 8601 extended format and the second column contains the actual values.
+        date and time in ISO 8601 extended format, and the second column contains the actual values.
+        :raises SIProtocolError: On a connection, protocol of framing error.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -635,12 +643,13 @@ class SIGatewayClient(_SIAbstractGatewayClient):
 
     def read_messages(self, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> Tuple[SIStatus, int, List[SIDeviceMessage]]:
         """
-        The read_messages method can be used to retrieve all or a subset of stored messages send by devices on all buses in the past from the gateway.
+        The read_messages() method can be used to retrieve all or a subset of stored messages send by devices on all buses in the past from the gateway.
 
         :param from_: Optional date and time from which the messages have to be retrieved, Defaults to the begin of time.
         :param to: Optional date and time to which the messages have to be retrieved, Defaults to the current time on the gateway.
         :param limit: Using this optional parameter you can limit the number of messages retrieved in total.
         :return: Returns three values. 1: the status of the operation, 2: the number of messages, 3: the list of retrieved messages.
+        :raises SIProtocolError: On a connection, protocol of framing error.
         """
 
         # Ensure that the client is in the CONNECTED state.

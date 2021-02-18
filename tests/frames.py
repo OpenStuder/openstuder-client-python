@@ -144,53 +144,61 @@ class ENUMERATEDFrame(unittest.TestCase):
 
 class DESCRIBEFrame(unittest.TestCase):
     def test_encode(self):
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, None)
         self.assertEqual('DESCRIBE\n\n', frame)
 
     def test_encode_with_access_id(self):
         for _ in range(1000):
             access_id = random_string(random_int(3, 32))
-            frame = _SIAbstractGatewayClient.encode_describe_frame(access_id, None, None)
+            frame = _SIAbstractGatewayClient.encode_describe_frame(access_id, None, None, None)
             self.assertEqual(f'DESCRIBE\nid:{access_id}\n\n', frame)
 
     def test_encode_with_device_id(self):
         for _ in range(1000):
             access_id = random_string(random_int(3, 32))
             device_id = random_string(random_int(3, 32))
-            frame = _SIAbstractGatewayClient.encode_describe_frame(access_id, device_id, None)
+            frame = _SIAbstractGatewayClient.encode_describe_frame(access_id, device_id, None, None)
             self.assertEqual(f'DESCRIBE\nid:{access_id}.{device_id}\n\n', frame)
 
+    def test_encode_with_property_id(self):
+        for _ in range(1000):
+            access_id = random_string(random_int(3, 32))
+            device_id = random_string(random_int(3, 32))
+            property_id = random_int(0, 32000)
+            frame = _SIAbstractGatewayClient.encode_describe_frame(access_id, device_id, property_id, None)
+            self.assertEqual(f'DESCRIBE\nid:{access_id}.{device_id}.{property_id}\n\n', frame)
+
     def test_encode_with_flags(self):
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeAccessInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeDeviceInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludePropertyInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeDriverInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeAccessInformation,IncludeDeviceInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeAccessInformation,IncludePropertyInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeAccessInformation,IncludeDriverInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION | SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION | SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeDeviceInformation,IncludePropertyInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION | SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION | SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeDeviceInformation,IncludeDriverInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION | SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION | SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludePropertyInformation,IncludeDriverInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION |
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION |
                                                                SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeAccessInformation,IncludeDeviceInformation,IncludePropertyInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION |
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION |
                                                                SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeAccessInformation,IncludeDeviceInformation,IncludeDriverInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION |
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION |
                                                                SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeAccessInformation,IncludePropertyInformation,IncludeDriverInformation\n\n', frame)
-        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION | SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION |
+        frame = _SIAbstractGatewayClient.encode_describe_frame(None, None, None, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION | SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION |
                                                                SIDescriptionFlags.INCLUDE_DRIVER_INFORMATION)
         self.assertEqual('DESCRIBE\nflags:IncludeDeviceInformation,IncludePropertyInformation,IncludeDriverInformation\n\n', frame)
 
@@ -198,8 +206,9 @@ class DESCRIBEFrame(unittest.TestCase):
         for _ in range(1000):
             access_id = random_string(random_int(3, 32))
             device_id = random_string(random_int(3, 32))
-            frame = _SIAbstractGatewayClient.encode_describe_frame(access_id, device_id, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION)
-            self.assertEqual(f'DESCRIBE\nid:{access_id}.{device_id}\nflags:IncludeDeviceInformation\n\n', frame)
+            property_id = random_int(0, 32000)
+            frame = _SIAbstractGatewayClient.encode_describe_frame(access_id, device_id, property_id, SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION)
+            self.assertEqual(f'DESCRIBE\nid:{access_id}.{device_id}.{property_id}\nflags:IncludeDeviceInformation\n\n', frame)
 
 
 class DESCRIPTIONFrame(unittest.TestCase):
