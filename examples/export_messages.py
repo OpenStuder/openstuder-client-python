@@ -3,7 +3,7 @@ import argparse
 import datetime
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Export datalog values to CSV files.')
+    parser = argparse.ArgumentParser(description='Export messages to CSV file.')
     parser.add_argument('-H', '--host', type=str, default='localhost', help='Host to connect to, defaults to localhost.')
     parser.add_argument('-P', '--port', type=int, default=1987, help='TCP port to use, defaults to 1987.')
     parser.add_argument('-u', '--user', type=str, default=None, help='Username for authorizing.')
@@ -30,6 +30,6 @@ if __name__ == '__main__':
                 for message in messages:
                     file.write(f'{message.timestamp.isoformat()},{message.access_id},{message.device_id},{message.message_id},{message.message}\n')
         else:
-            print('Successfully read datalog, but no values were returned')
+            print('Successfully read messages, but no message was returned')
     else:
-        print(f'Error reading datalog: {status}')
+        print(f'Error reading messages: {status}')
