@@ -554,8 +554,8 @@ class SIGatewayClient(_SIAbstractGatewayClient):
 
     def describe(self, device_access_id: str = None, device_id: str = None, property_id: int = None, flags: SIDescriptionFlags = None) -> Tuple[SIStatus, Optional[str], object]:
         """
-        This method can be used to retrieve information about the available devices and their properties from the connected gateway. Using the optional device_access_id and
-        device_id parameters, the method can either request information about the whole topology, a particular device access instance, a device or a property.
+        This method can be used to retrieve information about the available devices and their properties from the connected gateway. Using the optional device_access_id,
+        device_id and property_id parameters, the method can either request information about the whole topology, a particular device access instance, a device or a property.
 
         The flags control the level of detail in the gateway's response.
 
@@ -625,7 +625,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
 
         :param property_id: Global ID of the property for which the logged data should be retrieved. It has to be in the form '{device access ID}.{device ID}.{property ID}'.
         :param from_: Optional date and time from which the data has to be retrieved, defaults to the oldest value logged.
-        :param to: Optional date and time to which the data has to be retrieved, Defaults to the current time on the gateway.
+        :param to: Optional date and time to which the data has to be retrieved, defaults to the current time on the gateway.
         :param limit: Using this optional parameter you can limit the number of results retrieved in total.
         :return: Returns four values: 1: Status of the operation, 2: id of the property, 3: number of entries, 4: Properties data in CSV format whereas the first column is the
         date and time in ISO 8601 extended format, and the second column contains the actual values.
@@ -645,8 +645,8 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         """
         The read_messages() method can be used to retrieve all or a subset of stored messages send by devices on all buses in the past from the gateway.
 
-        :param from_: Optional date and time from which the messages have to be retrieved, Defaults to the begin of time.
-        :param to: Optional date and time to which the messages have to be retrieved, Defaults to the current time on the gateway.
+        :param from_: Optional date and time from which the messages have to be retrieved, defaults to the oldest message saved.
+        :param to: Optional date and time to which the messages have to be retrieved, defaults to the current time on the gateway.
         :param limit: Using this optional parameter you can limit the number of messages retrieved in total.
         :return: Returns three values. 1: the status of the operation, 2: the number of messages, 3: the list of retrieved messages.
         :raises SIProtocolError: On a connection, protocol of framing error.
@@ -1018,6 +1018,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         Instructs the gateway to scan every configured and functional device access driver for new devices and remove devices that do not respond anymore.
 
         The status of the operation and the number of devices present are reported using the on_enumerated() callback.
+
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -1026,25 +1028,27 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         # Encode and send ENUMERATE message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_enumerate_frame())
 
-    def describe(self, device_access_id: str = None, device_id: str = None, flags: SIDescriptionFlags = None) -> None:
+    def describe(self, device_access_id: str = None, device_id: str = None, property_id: int = None, flags: SIDescriptionFlags = None) -> None:
         """
-        This method can be used to retrieve information about the available devices and their properties from the connected gateway. Using the optional device_access_id and
-        device_id parameters, the method can either request information about the whole topology, a particular device access instance, a device or a property.
+        This method can be used to retrieve information about the available devices and their properties from the connected gateway. Using the optional device_access_id,
+        device_id and property_id parameters, the method can either request information about the whole topology, a particular device access instance, a device or a property.
 
         The flags control the level of detail in the gateway's response.
 
         The description is reported using the on_description() callback.
 
         :param device_access_id: Device access ID for which the description should be retrieved.
-        :param device_id: Device ID for which the description should be retrieved.
+        :param device_id: Device ID for which the description should be retrieved. Note that device_access_id must be present too.
+        :param property_id: Property ID for which the description should be retrieved. Note that device_access_id and device_id must be present too.
         :param flags: Flags to control level of detail of the response.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send DESCRIBE message to gateway.
-        self.__ws.send(super(SIAsyncGatewayClient, self).encode_describe_frame(device_access_id, device_id, flags))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_describe_frame(device_access_id, device_id, property_id, flags))
 
     def read_property(self, property_id: str) -> None:
         """
@@ -1053,6 +1057,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         The status of the read operation and the actual value of the property are reported using the on_property_read() callback.
 
         :param property_id: The ID of the property to read in the form '{device access ID}.{device ID}.{property ID}'.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -1075,6 +1080,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         :param value: Optional value to write.
         :param flags: Write flags, See SIWriteFlags for details, if not provided the flags are not send by the client and the gateway uses the default flags
                       (SIWriteFlags.PERMANENT).
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -1090,6 +1096,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         The status of the subscribe request is reported using the on_property_subscribed() callback.
 
         :param property_id: The ID of the property to subscribe to in the form '{device access ID}.{device ID}.{property ID}'.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -1105,6 +1112,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         The status of the unsubscribe request is reported using the on_property_unsubscribed() callback.
 
         :param property_id: The ID of the property to unsubscribe from in the form '{device access ID}.{device ID}.{property ID}'.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -1120,9 +1128,10 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         The status of this operation and the respective values are reported using the on_datalog_read_csv() callback.
 
         :param property_id: Global ID of the property for which the logged data should be retrieved. It has to be in the form '{device access ID}.{device ID}.{property ID}'.
-        :param from_: Optional date and time from which the data has to be retrieved, Defaults to the begin of time.
-        :param to: Optional date and time to which the data has to be retrieved, Defaults to the current time on the gateway.
+        :param from_: Optional date and time from which the data has to be retrieved, defaults to the oldest value logged.
+        :param to: Optional date and time to which the data has to be retrieved, defaults to the current time on the gateway.
         :param limit: Using this optional parameter you can limit the number of results retrieved in total.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
         # Ensure that the client is in the CONNECTED state.
@@ -1137,9 +1146,10 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
         The status of this operation and the retrieved messages are reported using the on_messages_read() callback.
 
-        :param from_: Optional date and time from which the messages have to be retrieved, Defaults to the begin of time.
-        :param to: Optional date and time to which the messages have to be retrieved, Defaults to the current time on the gateway.
+        :param from_: Optional date and time from which the messages have to be retrieved, defaults to the oldest message saved.
+        :param to: Optional date and time to which the messages have to be retrieved, defaults to the current time on the gateway.
         :param limit: Using this optional parameter you can limit the number of messages retrieved in total.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
         # Ensure that the client is in the CONNECTED state.
