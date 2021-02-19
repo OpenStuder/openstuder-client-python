@@ -10,8 +10,10 @@ def on_connected(access_level: str, gateway_version: str):
 
 
 host = 'localhost'
+user = 'garfield'
+password = 'lasagne'
 
 client = SIAsyncGatewayClient()
 client.on_error = on_error
 client.on_connected = on_connected
-client.connect(host, background=False)
+client.connect(host, user=user, password=password, background=False)
