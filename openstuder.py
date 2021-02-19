@@ -1245,7 +1245,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
     def __on_error(self, error: Exception) -> None:
         if callable(self.on_error):
-            self.on_error(error)
+            self.on_error(SIProtocolError(error.args[1]))
 
     def __on_close(self) -> None:
         # Change state to DISCONNECTED.
