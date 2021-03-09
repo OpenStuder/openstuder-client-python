@@ -25,6 +25,10 @@ class MyAsyncCallbacks(SIAsyncGatewayClientCallbacks):
     def on_property_read(self, status, property_id, value):
         print(f'PROPERTY READ status={status}, id={property_id}, value={value}')
 
+    def on_properties_read(self, results):
+        for result in results:
+            print(f'PROPERTIES READ status={result.status}, id={result.id}, value={result.value}')
+
     def on_property_written(self, status, property_id):
         print(f'PROPERTY WRITE status={status}, id={property_id}')
 
@@ -54,6 +58,6 @@ if __name__ == "__main__":
     client.set_callbacks(callbacks)
     client.connect('localhost')
     time.sleep(2)
-    client.write_property('demo.inv.1415')
+    client.read_properties(['demo.inv.3136', 'demo.inv.3137', 'demo.inv.2'])
     time.sleep(100)
     client.disconnect()

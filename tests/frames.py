@@ -278,52 +278,52 @@ class READPROPERTYFrame(unittest.TestCase):
 
 class PROPERTYREADFrame(unittest.TestCase):
     def test_decode_success_float(self):
-        status, id_, value = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Success\nid:demo.inv.3136\nvalue:0.123\n\n')
-        self.assertEqual(SIStatus.SUCCESS, status)
-        self.assertEqual('demo.inv.3136', id_)
-        self.assertEqual(0.123, value)
+        result = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Success\nid:demo.inv.3136\nvalue:0.123\n\n')
+        self.assertEqual(SIStatus.SUCCESS, result.status)
+        self.assertEqual('demo.inv.3136', result.id)
+        self.assertEqual(0.123, result.value)
 
     def test_decode_success_false(self):
-        status, id_, value = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Success\nid:demo.inv.3136\nvalue:false\n\n')
-        self.assertEqual(SIStatus.SUCCESS, status)
-        self.assertEqual('demo.inv.3136', id_)
-        self.assertEqual(False, value)
+        result = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Success\nid:demo.inv.3136\nvalue:false\n\n')
+        self.assertEqual(SIStatus.SUCCESS, result.status)
+        self.assertEqual('demo.inv.3136', result.id)
+        self.assertEqual(False, result.value)
 
     def test_decode_success_true(self):
-        status, id_, value = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Success\nid:demo.inv.3136\nvalue:true\n\n')
-        self.assertEqual(SIStatus.SUCCESS, status)
-        self.assertEqual('demo.inv.3136', id_)
-        self.assertEqual(True, value)
+        result = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Success\nid:demo.inv.3136\nvalue:true\n\n')
+        self.assertEqual(SIStatus.SUCCESS, result.status)
+        self.assertEqual('demo.inv.3136', result.id)
+        self.assertEqual(True, result.value)
 
     def test_decode_error(self):
-        status, id_, value = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Error\nid:demo.inv.3136\n\n')
-        self.assertEqual(SIStatus.ERROR, status)
-        self.assertEqual('demo.inv.3136', id_)
-        self.assertIsNone(value)
+        result = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Error\nid:demo.inv.3136\n\n')
+        self.assertEqual(SIStatus.ERROR, result.status)
+        self.assertEqual('demo.inv.3136', result.id)
+        self.assertIsNone(result.value)
 
     def test_decode_no_property(self):
-        status, id_, value = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:NoProperty\nid:demo.inv.3136\n\n')
-        self.assertEqual(SIStatus.NO_PROPERTY, status)
-        self.assertEqual('demo.inv.3136', id_)
-        self.assertIsNone(value)
+        result = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:NoProperty\nid:demo.inv.3136\n\n')
+        self.assertEqual(SIStatus.NO_PROPERTY, result.status)
+        self.assertEqual('demo.inv.3136', result.id)
+        self.assertIsNone(result.value)
 
     def test_decode_no_device(self):
-        status, id_, value = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:NoDevice\nid:demo.inv.3136\n\n')
-        self.assertEqual(SIStatus.NO_DEVICE, status)
-        self.assertEqual('demo.inv.3136', id_)
-        self.assertIsNone(value)
+        result = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:NoDevice\nid:demo.inv.3136\n\n')
+        self.assertEqual(SIStatus.NO_DEVICE, result.status)
+        self.assertEqual('demo.inv.3136', result.id)
+        self.assertIsNone(result.value)
 
     def test_decode_no_device_access(self):
-        status, id_, value = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:NoDeviceAccess\nid:demo.inv.3136\n\n')
-        self.assertEqual(SIStatus.NO_DEVICE_ACCESS, status)
-        self.assertEqual('demo.inv.3136', id_)
-        self.assertIsNone(value)
+        result = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:NoDeviceAccess\nid:demo.inv.3136\n\n')
+        self.assertEqual(SIStatus.NO_DEVICE_ACCESS, result.status)
+        self.assertEqual('demo.inv.3136', result.id)
+        self.assertIsNone(result.value)
 
     def test_decode_timeout(self):
-        status, id_, value = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Timeout\nid:demo.inv.3136\n\n')
-        self.assertEqual(SIStatus.TIMEOUT, status)
-        self.assertEqual('demo.inv.3136', id_)
-        self.assertIsNone(value)
+        result = _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\nstatus:Timeout\nid:demo.inv.3136\n\n')
+        self.assertEqual(SIStatus.TIMEOUT, result.status)
+        self.assertEqual('demo.inv.3136', result.id)
+        self.assertIsNone(result.value)
 
     def test_decode_frame_error(self):
         with self.assertRaises(SIProtocolError) as context:
@@ -347,6 +347,93 @@ class PROPERTYREADFrame(unittest.TestCase):
             _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ\n')
         with self.assertRaises(SIProtocolError):
             _SIAbstractGatewayClient.decode_property_read_frame('PROPERTY READ')
+
+
+class READPROPERTIESFrame(unittest.TestCase):
+    def test_encode(self):
+        frame = _SIAbstractGatewayClient.encode_read_properties_frame(['demo.inv.3136', 'demo.inv.3137'])
+        self.assertEqual('READ PROPERTIES\n\n["demo.inv.3136", "demo.inv.3137"]', frame)
+
+
+class PROPERTIESREADFrame(unittest.TestCase):
+    def test_decode_success_float(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "Success", "id": "demo.inv.3136", "value": 0.123}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.SUCCESS, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertEqual(0.123, results[0].value)
+
+    def test_decode_success_false(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "Success", "id": "demo.inv.3136", "value": false}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.SUCCESS, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertEqual(False, results[0].value)
+
+    def test_decode_success_true(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "Success", "id": "demo.inv.3136", "value": true}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.SUCCESS, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertEqual(True, results[0].value)
+
+    def test_decode_error(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "Error", "id": "demo.inv.3136"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.ERROR, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertIsNone(results[0].value)
+
+    def test_decode_no_property(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "NoProperty", "id": "demo.inv.3136"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.NO_PROPERTY, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertIsNone(results[0].value)
+
+    def test_decode_no_device(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "NoDevice", "id": "demo.inv.3136"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.NO_DEVICE, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertIsNone(results[0].value)
+
+    def test_decode_no_device_access(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "NoDeviceAccess", "id": "demo.inv.3136"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.NO_DEVICE_ACCESS, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertIsNone(results[0].value)
+
+    def test_decode_timeout(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "Timeout", "id": "demo.inv.3136"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.TIMEOUT, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertIsNone(results[0].value)
+
+    def test_decode_frame_error(self):
+        with self.assertRaises(SIProtocolError) as context:
+            _SIAbstractGatewayClient.decode_properties_read_frame('ERROR\nreason:test\n\n')
+        self.assertEqual('test', context.exception.reason())
+
+    def test_decode_invalid_frame(self):
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPRTIES READ\nstatus:Success\n\n[]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n[]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "Success", "value": 0.123}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"id": "demo.inv.3136", "value": 0.123}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"value": 0.123}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\n\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ')
 
 
 class WRITEPROPERTYFrame(unittest.TestCase):

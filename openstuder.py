@@ -183,6 +183,49 @@ class SIDeviceMessage:
         return SIDeviceMessage(d['access_id'], d['device_id'], d['message_id'], d['message'], datetime.datetime.fromisoformat(d['timestamp']))
 
 
+class SIPropertyReadResult:
+    """
+    The SIDPropertyReadResult class represents the status of a property read result.
+    """
+    def __init__(self, status: SIStatus, id: str, value: Optional[any]):
+        self.status = status
+        """
+        Status of the property read operation.
+        """
+
+        self.id = id
+        """
+        ID of the property read.
+        """
+
+        self.value = value
+        """
+        Value that was read from the property, optional.
+        """
+
+    def to_tuple(self) -> Tuple[SIStatus, str, Optional[any]]:
+        return self.status, self.id, self.value
+
+    @staticmethod
+    def from_dict(d: dict) -> SIPropertyReadResult:
+        try:
+            result = SIPropertyReadResult(SIStatus.from_string(d['status']), d['id'], None)
+            if 'value' in d:
+                try:
+                    result.value = float(d['value'])
+                except ValueError:
+                    string = d['value'].lower()
+                    if string == 'true':
+                        result.value = True
+                    elif string == 'false':
+                        result.value = False
+                    else:
+                        result.value = string
+            return result
+        except KeyError:
+            raise SIProtocolError('invalid json body')
+
+
 class _SIAbstractGatewayClient:
     def __init__(self):
         super(_SIAbstractGatewayClient, self).__init__()
@@ -267,7 +310,7 @@ class _SIAbstractGatewayClient:
         return 'READ PROPERTY\nid:{property_id}\n\n'.format(property_id=property_id)
 
     @staticmethod
-    def decode_property_read_frame(frame: str) -> Tuple[SIStatus, str, Optional[any]]:
+    def decode_property_read_frame(frame: str) -> SIPropertyReadResult:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'PROPERTY READ' and 'status' in headers and 'id' in headers:
             status = SIStatus.from_string(headers['status'])
@@ -282,13 +325,28 @@ class _SIAbstractGatewayClient:
                         value = False
                     else:
                         value = string
-                return status, headers['id'], value
+                return SIPropertyReadResult(status, headers['id'], value)
             else:
-                return status, headers['id'], None
+                return SIPropertyReadResult(status, headers['id'], None)
         elif command == 'ERROR':
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during property read')
+
+    @staticmethod
+    def encode_read_properties_frame(property_ids: List[str]) -> str:
+        return 'READ PROPERTIES\n\n{property_ids}'.format(property_ids=json.dumps(property_ids))
+
+    @staticmethod
+    def decode_properties_read_frame(frame: str) -> List[SIPropertyReadResult]:
+        command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
+        if command == 'PROPERTIES READ' and 'status' in headers and headers['status'] == "Success":
+            results = json.loads(body, object_hook=SIPropertyReadResult.from_dict)
+            return results
+        elif command == 'ERROR':
+            raise SIProtocolError(headers['reason'])
+        else:
+            raise SIProtocolError('unknown error during properties read')
 
     @staticmethod
     def encode_write_property_frame(property_id: str, value: Optional[any], flags: Optional[SIWriteFlags]) -> str:
@@ -592,7 +650,26 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ws.send(super(SIGatewayClient, self).encode_read_property_frame(property_id))
 
         # Wait for PROPERTY READ message, decode it and return data.
-        return super(SIGatewayClient, self).decode_property_read_frame(self.__receive_frame_until_commands(['PROPERTY READ', 'ERROR']))
+        return super(SIGatewayClient, self).decode_property_read_frame(self.__receive_frame_until_commands(['PROPERTY READ', 'ERROR'])).to_tuple()
+
+    def read_properties(self, property_ids: List[str]) -> List[SIPropertyReadResult]:
+        """
+        This method is used to retrieve the actual value of multiple properties at the same time from the connected gateway. The properties are identified by the property_ids
+        parameter.
+
+        :param property_ids: The IDs of the properties to read in the form '{device access ID}.{device ID}.{property ID}'.
+        :return: Returns one value: 1: List of statuses and values of all read properties.
+        :raises SIProtocolError: On a connection, protocol of framing error.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send READ PROPERTIES message to gateway.
+        self.__ws.send(super(SIGatewayClient, self).encode_read_properties_frame(property_ids))
+
+        # Wait for PROPERTIES READ message, decode it and return data.
+        return super(SIGatewayClient, self).decode_properties_read_frame(self.__receive_frame_until_commands(['PROPERTIES READ', 'ERROR']))
 
     def write_property(self, property_id: str, value: any = None, flags: SIWriteFlags = None) -> Tuple[SIStatus, str]:
         """
@@ -745,6 +822,14 @@ class SIAsyncGatewayClientCallbacks:
         """
         pass
 
+    def on_properties_read(self, results: List[SIPropertyReadResult]) -> None:
+        """
+        Called when the multiple properties read operation started using read_properties() has completed on the gateway.
+
+        :param results: List of all results of the operation.
+        """
+        pass
+
     def on_property_written(self, status: SIStatus, property_id: str) -> None:
         """
         Called when the property write operation started using write_property() has completed on the gateway.
@@ -873,6 +958,13 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         The callback takes three parameters: 1: Status of the read operation, 2: the ID of the property read, 3: the value read.
         """
 
+        self.on_properties_read: Optional[Callable[[List[SIPropertyReadResult]], None]] = None
+        """
+        Called when the multiple properties read operation started using read_properties() has completed on the gateway.
+
+        The callback takes one parameters: 1: List of all results of the operation.
+        """
+
         self.on_property_written: Optional[Callable[[str, str], None]] = None
         """
         Called when the property write operation started using write_property() has completed on the gateway.
@@ -978,6 +1070,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             self.on_enumerated = callbacks.on_enumerated
             self.on_description = callbacks.on_description
             self.on_property_read = callbacks.on_property_read
+            self.on_properties_read = callbacks.on_properties_read
             self.on_property_written = callbacks.on_property_written
             self.on_property_subscribed = callbacks.on_property_subscribed
             self.on_property_unsubscribed = callbacks.on_property_unsubscribed
@@ -1065,6 +1158,23 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
         # Encode and send READ PROPERTY message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_property_frame(property_id))
+
+    def read_properties(self, property_ids: List[str]) -> None:
+        """
+        This method is used to retrieve the actual value of multiple property at the same time from the connected gateway. The properties are identified by the property_ids
+        parameter.
+
+        The status of the multiple read operations and the actual value of the property are reported using the on_properties_read() callback.
+
+        :param property_ids: The IDs of the properties to read in the form '{device access ID}.{device ID}.{property ID}'.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send READ PROPERTY message to gateway.
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_properties_frame(property_ids))
 
     def write_property(self, property_id: str, value: any = None, flags: SIWriteFlags = None) -> None:
         """
@@ -1215,9 +1325,13 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     if callable(self.on_description):
                         self.on_description(status, id_, description)
                 elif command == 'PROPERTY READ':
-                    status, id_, value = super(SIAsyncGatewayClient, self).decode_property_read_frame(frame)
+                    result = super(SIAsyncGatewayClient, self).decode_property_read_frame(frame)
                     if callable(self.on_property_read):
-                        self.on_property_read(status, id_, value)
+                        self.on_property_read(result.status, result.id, result.value)
+                elif command == 'PROPERTIES READ':
+                    results = super(SIAsyncGatewayClient, self).decode_properties_read_frame(frame)
+                    if callable(self.on_properties_read):
+                        self.on_properties_read(results)
                 elif command == 'PROPERTY WRITTEN':
                     status, id_ = super(SIAsyncGatewayClient, self).decode_property_written_frame(frame)
                     if callable(self.on_property_written):

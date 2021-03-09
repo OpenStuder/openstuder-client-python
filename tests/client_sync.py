@@ -18,8 +18,13 @@ if __name__ == "__main__":
     print(f'DESCRIBE -> DESCRIPTION: status = {status}, id = {id_}, description={desc}')
 
     # Read property.
-    status, id_, value = client.read_property('demo.inv.3000')
+    status, id_, value = client.read_property('demo.inv.3136')
     print(f'READ PROPERTY -> PROPERTY READ: status = {status}, id = {id_}, value={value}')
+
+    # Read properties.
+    results = client.read_properties(['demo.inv.3136', 'demo.inv.3137'])
+    for result in results:
+        print(f'READ PROPERTIES -> PROPERTIES READ: status = {result.status}, id = {result.id}, value={result.value}')
 
     # Write property.
     status, id_ = client.write_property('demo.inv.1399')
