@@ -377,6 +377,17 @@ class PROPERTIESREADFrame(unittest.TestCase):
         self.assertEqual('demo.inv.3136', results[0].id)
         self.assertEqual(True, results[0].value)
 
+    def test_decode_success_multiple(self):
+        results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "Success", "id": "demo.inv.3136", "value": true}, '
+                                                                        '{"status": "Success", "id": "demo.inv.3137", "value": 0}]')
+        self.assertEqual(2, len(results))
+        self.assertEqual(SIStatus.SUCCESS, results[0].status)
+        self.assertEqual('demo.inv.3136', results[0].id)
+        self.assertEqual(True, results[0].value)
+        self.assertEqual(SIStatus.SUCCESS, results[1].status)
+        self.assertEqual('demo.inv.3137', results[1].id)
+        self.assertEqual(0, results[1].value)
+
     def test_decode_error(self):
         results = _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES READ\nstatus:Success\n\n[{"status": "Error", "id": "demo.inv.3136"}]')
         self.assertEqual(1, len(results))
@@ -551,6 +562,62 @@ class PROPERTYSUBSCRIBEDFrame(unittest.TestCase):
             _SIAbstractGatewayClient.decode_property_subscribed_frame('PROPERTY SUBSCRIBED')
 
 
+class SUBSCRIBEPROPERTIESFrame(unittest.TestCase):
+    def test_encode(self):
+        frame = _SIAbstractGatewayClient.encode_subscribe_properties_frame(['demo.bat.7003', 'demo.bat.7004'])
+        self.assertEqual('SUBSCRIBE PROPERTIES\n\n["demo.bat.7003", "demo.bat.7004"]', frame)
+
+
+class PROPERTIESSUBSCRIBEDFrame(unittest.TestCase):
+    def test_decode_success(self):
+        results = _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\nstatus:Success\n\n[{"status": "Success", "id": "demo.bat.7003"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.SUCCESS, results[0].status)
+        self.assertEqual('demo.bat.7003', results[0].id)
+
+    def test_decode_multiple(self):
+        results = _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\nstatus:Success\n\n[{"status": "Success", "id": "demo.bat.7003"}, {"status": '
+                                                                              '"Error", "id": "demo.bat.7004"}]')
+        self.assertEqual(2, len(results))
+        self.assertEqual(SIStatus.SUCCESS, results[0].status)
+        self.assertEqual('demo.bat.7003', results[0].id)
+        self.assertEqual(SIStatus.ERROR, results[1].status)
+        self.assertEqual('demo.bat.7004', results[1].id)
+
+    def test_decode_error(self):
+        results = _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\nstatus:Success\n\n[{"status": "Error", "id": "demo.bat.7003"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.ERROR, results[0].status)
+        self.assertEqual('demo.bat.7003', results[0].id)
+
+    def test_decode_no_property(self):
+        results = _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\nstatus:Success\n\n[{"status": "NoProperty", "id": "demo.bat.7003"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.NO_PROPERTY, results[0].status)
+        self.assertEqual('demo.bat.7003', results[0].id)
+
+    def test_decode_frame_error(self):
+        with self.assertRaises(SIProtocolError) as context:
+            _SIAbstractGatewayClient.decode_properties_subscribed_frame('ERROR\nreason:test\n\n')
+        self.assertEqual('test', context.exception.reason())
+
+    def test_decode_invalid_frame(self):
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCIBED\nstatus:Success\n\n[]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\nstatus:Success\n[{"status": "Success", "id": "demo.bat.7003"}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\nstatus:Success\n[{"status": "Success"}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\nstatus:Success\n[{"id": "demo.bat.7003"}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\n\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_subscribed_frame('PROPERTIES SUBSCRIBED')
+
+
 class PROPERTYUPDATEFrame(unittest.TestCase):
     def test_decode_float(self):
         id_, value = _SIAbstractGatewayClient.decode_property_update_frame('PROPERTY UPDATE\nid:demo.bat.7003\nvalue:3.874\n\n')
@@ -631,6 +698,62 @@ class PROPERTYUNSUBSCRIBEDFrame(unittest.TestCase):
             _SIAbstractGatewayClient.decode_property_unsubscribed_frame('PROPERTY UNSUBSCRIBED\n')
         with self.assertRaises(SIProtocolError):
             _SIAbstractGatewayClient.decode_property_unsubscribed_frame('PROPERTY UNSUBSCRIBED')
+
+
+class UNSUBSCRIBEPROPERTIESFrame(unittest.TestCase):
+    def test_encode(self):
+        frame = _SIAbstractGatewayClient.encode_unsubscribe_properties_frame(['demo.bat.7003', 'demo.bat.7004'])
+        self.assertEqual('UNSUBSCRIBE PROPERTIES\n\n["demo.bat.7003", "demo.bat.7004"]', frame)
+
+
+class PROPERTIESUNSUBSCRIBEDFrame(unittest.TestCase):
+    def test_decode_success(self):
+        results = _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\nstatus:Success\n\n[{"status": "Success", "id": "demo.bat.7003"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.SUCCESS, results[0].status)
+        self.assertEqual('demo.bat.7003', results[0].id)
+
+    def test_decode_multiple(self):
+        results = _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\nstatus:Success\n\n[{"status": "Success", "id": "demo.bat.7003"}, '
+                                                                                '{"status": "Error", "id": "demo.bat.7004"}]')
+        self.assertEqual(2, len(results))
+        self.assertEqual(SIStatus.SUCCESS, results[0].status)
+        self.assertEqual('demo.bat.7003', results[0].id)
+        self.assertEqual(SIStatus.ERROR, results[1].status)
+        self.assertEqual('demo.bat.7004', results[1].id)
+
+    def test_decode_error(self):
+        results = _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\nstatus:Success\n\n[{"status": "Error", "id": "demo.bat.7003"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.ERROR, results[0].status)
+        self.assertEqual('demo.bat.7003', results[0].id)
+
+    def test_decode_no_property(self):
+        results = _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\nstatus:Success\n\n[{"status": "NoProperty", "id": "demo.bat.7003"}]')
+        self.assertEqual(1, len(results))
+        self.assertEqual(SIStatus.NO_PROPERTY, results[0].status)
+        self.assertEqual('demo.bat.7003', results[0].id)
+
+    def test_decode_frame_error(self):
+        with self.assertRaises(SIProtocolError) as context:
+            _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('ERROR\nreason:test\n\n')
+        self.assertEqual('test', context.exception.reason())
+
+    def test_decode_invalid_frame(self):
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCIBED\nstatus:Success\n\n[]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\nstatus:Success\n[{"status": "Success", "id": "demo.bat.7003"}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\nstatus:Success\n[{"status": "Success"}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\nstatus:Success\n[{"id": "demo.bat.7003"}]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\n\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_unsubscribed_frame('PROPERTIES UNSUBSCRIBED')
 
 
 class READDATALOGFrame(unittest.TestCase):

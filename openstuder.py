@@ -121,11 +121,11 @@ class SIDescriptionFlags(Flag):
 
 class SIWriteFlags(Flag):
     """
-        Flags to control write property operation.
+    Flags to control write property operation.
 
-        - **SIWriteFlags.NONE**: No write flags.
-        - **SIWriteFlags.PERMANENT**: Write the change to the persistent storage, eg the change lasts reboots.
-        """
+    - **SIWriteFlags.NONE**: No write flags.
+    - **SIWriteFlags.PERMANENT**: Write the change to the persistent storage, eg the change lasts reboots.
+    """
 
     NONE = 0
     PERMANENT = auto()
@@ -152,6 +152,7 @@ class SIDeviceMessage:
     """
     The SIDeviceMessage class represents a message a device connected to the OpenStuder gateway has broadcast.
     """
+
     def __init__(self, access_id: str, device_id: str, message_id: str, message: str, timestamp: datetime.datetime):
         self.timestamp = timestamp
         """
@@ -180,20 +181,24 @@ class SIDeviceMessage:
 
     @staticmethod
     def from_dict(d: dict) -> SIDeviceMessage:
-        return SIDeviceMessage(d['access_id'], d['device_id'], d['message_id'], d['message'], datetime.datetime.fromisoformat(d['timestamp']))
+        try:
+            return SIDeviceMessage(d['access_id'], d['device_id'], d['message_id'], d['message'], datetime.datetime.fromisoformat(d['timestamp']))
+        except KeyError:
+            raise SIProtocolError('invalid json body')
 
 
 class SIPropertyReadResult:
     """
     The SIDPropertyReadResult class represents the status of a property read result.
     """
-    def __init__(self, status: SIStatus, id: str, value: Optional[any]):
+
+    def __init__(self, status: SIStatus, id_: str, value: Optional[any]):
         self.status = status
         """
         Status of the property read operation.
         """
 
-        self.id = id
+        self.id = id_
         """
         ID of the property read.
         """
@@ -222,6 +227,33 @@ class SIPropertyReadResult:
                     else:
                         result.value = string
             return result
+        except KeyError:
+            raise SIProtocolError('invalid json body')
+
+
+class SIPropertySubscriptionResult:
+    """
+    The SIDPropertyReadResult class represents the status of a property subscription/unsubscription.
+    """
+
+    def __init__(self, status: SIStatus, id_: str):
+        self.status = status
+        """
+        Status of the property subscribe or unsubscribe operation.
+        """
+
+        self.id = id_
+        """
+        ID of the property.
+        """
+
+    def to_tuple(self) -> Tuple[SIStatus, str]:
+        return self.status, self.id
+
+    @staticmethod
+    def from_dict(d: dict) -> SIPropertySubscriptionResult:
+        try:
+            return SIPropertySubscriptionResult(SIStatus.from_string(d['status']), d['id'])
         except KeyError:
             raise SIProtocolError('invalid json body')
 
@@ -386,6 +418,20 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error during property subscribe')
 
     @staticmethod
+    def encode_subscribe_properties_frame(property_ids: List[str]) -> str:
+        return 'SUBSCRIBE PROPERTIES\n\n{property_ids}'.format(property_ids=json.dumps(property_ids))
+
+    @staticmethod
+    def decode_properties_subscribed_frame(frame: str) -> List[SIPropertySubscriptionResult]:
+        command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
+        if command == 'PROPERTIES SUBSCRIBED' and 'status' in headers and headers['status'] == "Success":
+            return json.loads(body, object_hook=SIPropertySubscriptionResult.from_dict)
+        elif command == 'ERROR':
+            raise SIProtocolError(headers['reason'])
+        else:
+            raise SIProtocolError('unknown error during properties read')
+
+    @staticmethod
     def encode_unsubscribe_property_frame(property_id: str) -> str:
         return 'UNSUBSCRIBE PROPERTY\nid:{property_id}\n\n'.format(property_id=property_id)
 
@@ -398,6 +444,20 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during property unsubscribe')
+
+    @staticmethod
+    def encode_unsubscribe_properties_frame(property_ids: List[str]) -> str:
+        return 'UNSUBSCRIBE PROPERTIES\n\n{property_ids}'.format(property_ids=json.dumps(property_ids))
+
+    @staticmethod
+    def decode_properties_unsubscribed_frame(frame: str) -> List[SIPropertySubscriptionResult]:
+        command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
+        if command == 'PROPERTIES UNSUBSCRIBED' and 'status' in headers and headers['status'] == "Success":
+            return json.loads(body, object_hook=SIPropertySubscriptionResult.from_dict)
+        elif command == 'ERROR':
+            raise SIProtocolError(headers['reason'])
+        else:
+            raise SIProtocolError('unknown error during properties read')
 
     @staticmethod
     def decode_property_update_frame(frame: str) -> Tuple[str, any]:
@@ -841,19 +901,35 @@ class SIAsyncGatewayClientCallbacks:
 
     def on_property_subscribed(self, status: SIStatus, property_id: str) -> None:
         """
-        Called when the gateway returned the status of the property subscription requested using the property_subscribe() method.
+        Called when the gateway returned the status of the property subscription requested using the subscribe_to_property() method.
 
         :param status: The status of the subscription.
         :param property_id: ID of the property.
         """
         pass
 
+    def on_properties_subscribed(self, statuses: List[SIPropertySubscriptionResult]) -> None:
+        """
+        Called when the gateway returned the status of the properties subscription requested using the subscribe_to_properties() method.
+
+        :param statuses: The statuses of the individual subscriptions.
+        """
+        pass
+
     def on_property_unsubscribed(self, status: SIStatus, property_id: str) -> None:
         """
-        Called when the gateway returned the status of the property unsubscription requested using the property_unsubscribe() method.
+        Called when the gateway returned the status of the property unsubscription requested using the unsubscribe_from_property() method.
 
         :param status: The status of the unsubscription.
         :param property_id: ID of the property.
+        """
+        pass
+
+    def on_properties_unsubscribed(self, statuses: List[SIPropertySubscriptionResult]) -> None:
+        """
+        Called when the gateway returned the status of the properties unsubscription requested using the unsubscribe_from_properties() method.
+
+        :param statuses: The statuses of the individual unsubscriptions.
         """
         pass
 
@@ -974,16 +1050,30 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
         self.on_property_subscribed: Optional[Callable[[str, str], None]] = None
         """
-        Called when the gateway returned the status of the property subscription requested using the property_subscribe() method.
+        Called when the gateway returned the status of the property subscription requested using the subscribe_to_property() method.
         
         The callback takes two parameters: 1: The status of the subscription, 2: The ID of the property.
         """
 
+        self.on_properties_subscribed: Optional[Callable[[List[SIPropertySubscriptionResult]], None]] = None
+        """
+        Called when the gateway returned the status of the properties subscription requested using the subscribe_to_properties() method.
+
+        The callback takes one parameter: 1: List of statuses of individual subscription requests.
+        """
+
         self.on_property_unsubscribed: Optional[Callable[[str, str], None]] = None
         """
-        Called when the gateway returned the status of the property unsubscription requested using the property_unsubscribe() method.
+        Called when the gateway returned the status of the property unsubscription requested using the unsubscribe_from_property() method.
 
         The callback takes two parameters: 1: The status of the unsubscription, 2: The ID of the property.
+        """
+
+        self.on_properties_unsubscribed: Optional[Callable[[List[SIPropertySubscriptionResult]], None]] = None
+        """
+        Called when the gateway returned the status of the properties unsubscription requested using the unsubscribe_from_properties() method.
+
+        The callback takes one parameter: 1: List of statuses of individual unsubscription requests.
         """
 
         self.on_property_updated: Optional[Callable[[str, any], None]] = None
@@ -1073,7 +1163,9 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             self.on_properties_read = callbacks.on_properties_read
             self.on_property_written = callbacks.on_property_written
             self.on_property_subscribed = callbacks.on_property_subscribed
+            self.on_properties_subscribed = callbacks.on_properties_subscribed
             self.on_property_unsubscribed = callbacks.on_property_unsubscribed
+            self.on_properties_unsubscribed = callbacks.on_properties_unsubscribed
             self.on_property_updated = callbacks.on_property_updated
             self.on_datalog_read_csv = callbacks.on_datalog_read_csv
             self.on_device_message = callbacks.on_device_message
@@ -1173,7 +1265,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
-        # Encode and send READ PROPERTY message to gateway.
+        # Encode and send READ PROPERTIES message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_properties_frame(property_ids))
 
     def write_property(self, property_id: str, value: any = None, flags: SIWriteFlags = None) -> None:
@@ -1215,6 +1307,22 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         # Encode and send SUBSCRIBE PROPERTY message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_subscribe_property_frame(property_id))
 
+    def subscribe_to_properties(self, property_ids: List[str]) -> None:
+        """
+        This method can be used to subscribe to multiple properties on the connected gateway. The properties are identified by the property_ids parameter.
+
+        The status of the subscribe request is reported using the on_properties_subscribed() callback.
+
+        :param property_ids: The list of IDs of the properties to subscribe to in the form '{device access ID}.{device ID}.{property ID}'.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send SUBSCRIBE PROPERTIES message to gateway.
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_subscribe_properties_frame(property_ids))
+
     def unsubscribe_from_property(self, property_id: str) -> None:
         """
         This method can be used to unsubscribe from a property on the connected gateway. The property is identified by the property_id parameter.
@@ -1230,6 +1338,22 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
         # Encode and send UNSUBSCRIBE PROPERTY message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_unsubscribe_property_frame(property_id))
+
+    def unsubscribe_from_properties(self, property_ids: List[str]) -> None:
+        """
+        This method can be used to unsubscribe from multiple properties on the connected gateway. The properties are identified by the property_ids parameter.
+
+        The status of the unsubscribe request is reported using the on_properties_unsubscribed() callback.
+
+        :param property_ids: The list of IDs of the properties to unsubscribe from in the form '{device access ID}.{device ID}.{property ID}'.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send UNSUBSCRIBE PROPERTY message to gateway.
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_unsubscribe_properties_frame(property_ids))
 
     def read_datalog(self, property_id: str, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> None:
         """
@@ -1340,10 +1464,18 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     status, id_ = super(SIAsyncGatewayClient, self).decode_property_subscribed_frame(frame)
                     if callable(self.on_property_subscribed):
                         self.on_property_subscribed(status, id_)
+                elif command == 'PROPERTIES SUBSCRIBED':
+                    statuses = super(SIAsyncGatewayClient, self).decode_properties_subscribed_frame(frame)
+                    if callable(self.on_properties_subscribed):
+                        self.on_properties_subscribed(statuses)
                 elif command == 'PROPERTY UNSUBSCRIBED':
                     status, id_ = super(SIAsyncGatewayClient, self).decode_property_unsubscribed_frame(frame)
                     if callable(self.on_property_unsubscribed):
                         self.on_property_unsubscribed(status, id_)
+                elif command == 'PROPERTIES UNSUBSCRIBED':
+                    statuses = super(SIAsyncGatewayClient, self).decode_properties_unsubscribed_frame(frame)
+                    if callable(self.on_properties_unsubscribed):
+                        self.on_properties_unsubscribed(statuses)
                 elif command == 'PROPERTY UPDATE':
                     id_, value = super(SIAsyncGatewayClient, self).decode_property_update_frame(frame)
                     if callable(self.on_property_updated):
