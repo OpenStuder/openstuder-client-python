@@ -757,6 +757,31 @@ class PROPERTIESUNSUBSCRIBEDFrame(unittest.TestCase):
 
 
 class READDATALOGFrame(unittest.TestCase):
+    def test_encode_property_list(self):
+        frame = _SIAbstractGatewayClient.encode_read_datalog_frame(None, None, None, None)
+        self.assertEqual('READ DATALOG\n\n', frame)
+
+    def test_encode_property_list_from_date(self):
+        frame = _SIAbstractGatewayClient.encode_read_datalog_frame(None, datetime.datetime(year=1987, month=12, day=19), None, None)
+        self.assertEqual('READ DATALOG\nfrom:1987-12-19T00:00:00\n\n', frame)
+
+    def test_encode_property_list_from_datetime(self):
+        frame = _SIAbstractGatewayClient.encode_read_datalog_frame(None, datetime.datetime(year=1987, month=12, day=19, hour=13, minute=10, second=30), None, None)
+        self.assertEqual('READ DATALOG\nfrom:1987-12-19T13:10:30\n\n', frame)
+
+    def test_encode_property_list_to_date(self):
+        frame = _SIAbstractGatewayClient.encode_read_datalog_frame(None, None, datetime.datetime(year=1987, month=12, day=19), None)
+        self.assertEqual('READ DATALOG\nto:1987-12-19T00:00:00\n\n', frame)
+
+    def test_encode_property_list_to_datetime(self):
+        frame = _SIAbstractGatewayClient.encode_read_datalog_frame(None, None, datetime.datetime(year=1987, month=12, day=19, hour=13, minute=10, second=30), None)
+        self.assertEqual('READ DATALOG\nto:1987-12-19T13:10:30\n\n', frame)
+
+    def test_encode_property_list_from_to(self):
+        frame = _SIAbstractGatewayClient.encode_read_datalog_frame(None, datetime.datetime(year=1987, month=12, day=19, hour=13, minute=10, second=30),
+                                                                   datetime.datetime(year=1987, month=12, day=20, hour=13, minute=10, second=30), None)
+        self.assertEqual('READ DATALOG\nfrom:1987-12-19T13:10:30\nto:1987-12-20T13:10:30\n\n', frame)
+
     def test_encode_minimal(self):
         frame = _SIAbstractGatewayClient.encode_read_datalog_frame('demo.inv.3137', None, None, None)
         self.assertEqual('READ DATALOG\nid:demo.inv.3137\n\n', frame)
@@ -793,6 +818,13 @@ class READDATALOGFrame(unittest.TestCase):
 
 
 class DATALOGREADFrame(unittest.TestCase):
+    def test_decode_property_list(self):
+        status, id_, count, properties = _SIAbstractGatewayClient.decode_datalog_read_frame('DATALOG READ\nstatus:Success\ncount:2\n\ndemo.bat.7003\ndemo.inv.3136')
+        self.assertEqual(SIStatus.SUCCESS, status)
+        self.assertEqual(None, id_)
+        self.assertEqual(2, count)
+        self.assertEqual('demo.bat.7003\ndemo.inv.3136', properties)
+
     def test_decode_success(self):
         status, id_, count, csv = _SIAbstractGatewayClient.decode_datalog_read_frame('DATALOG READ\nstatus:Success\nid:demo.bat.7003\ncount:2\n\n2021-02-07T20:18:00,0.03145\n2021-02-07T20:17:00,0.84634')
         self.assertEqual(SIStatus.SUCCESS, status)
@@ -819,8 +851,6 @@ class DATALOGREADFrame(unittest.TestCase):
             _SIAbstractGatewayClient.decode_datalog_read_frame('DATALOG READ\nstatus:Success\nid:demo.bat.7003\ncount:2\n2021-02-07T20:18:00,0.03145\n2021-02-07T20:17:00,0.84634')
         with self.assertRaises(SIProtocolError):
             _SIAbstractGatewayClient.decode_datalog_read_frame('DATALOG READ\nstatus:Success\nid:demo.bat.7003\n\n2021-02-07T20:18:00,0.03145\n2021-02-07T20:17:00,0.84634')
-        with self.assertRaises(SIProtocolError):
-            _SIAbstractGatewayClient.decode_datalog_read_frame('DATALOG READ\nstatus:Success\ncount:2\n\n2021-02-07T20:18:00,0.03145\n2021-02-07T20:17:00,0.84634')
         with self.assertRaises(SIProtocolError):
             _SIAbstractGatewayClient.decode_datalog_read_frame('DATALOG READ\nid:demo.bat.7003\ncount:2\n\n2021-02-07T20:18:00,0.03145\n2021-02-07T20:17:00,0.84634')
         with self.assertRaises(SIProtocolError):

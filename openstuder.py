@@ -480,8 +480,10 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error receiving property update')
 
     @staticmethod
-    def encode_read_datalog_frame(property_id: str, from_: Optional[datetime.datetime], to: Optional[datetime.datetime], limit: Optional[int]) -> str:
-        frame = 'READ DATALOG\nid:{property_id}\n'.format(property_id=property_id)
+    def encode_read_datalog_frame(property_id: Optional[str], from_: Optional[datetime.datetime], to: Optional[datetime.datetime], limit: Optional[int]) -> str:
+        frame = 'READ DATALOG\n'
+        if property_id is not None:
+            frame += 'id:{property_id}\n'.format(property_id=property_id)
         frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('from', from_)
         frame += _SIAbstractGatewayClient.get_timestamp_header_if_present('to', to)
         if limit is not None:
@@ -490,10 +492,10 @@ class _SIAbstractGatewayClient:
         return frame
 
     @staticmethod
-    def decode_datalog_read_frame(frame: str) -> Tuple[SIStatus, str, int, str]:
+    def decode_datalog_read_frame(frame: str) -> Tuple[SIStatus, Optional[str], int, str]:
         command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
-        if command == 'DATALOG READ' and 'status' in headers and 'id' in headers and 'count' in headers:
-            return SIStatus.from_string(headers['status']), headers['id'], int(headers['count']), body
+        if command == 'DATALOG READ' and 'status' in headers and 'count' in headers:
+            return SIStatus.from_string(headers['status']), headers.get('id'), int(headers['count']), body
         elif command == 'ERROR':
             raise SIProtocolError(headers['reason'])
         else:
@@ -756,6 +758,28 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         # Wait for PROPERTY WRITTEN message, decode it and return data.
         return super(SIGatewayClient, self).decode_property_written_frame(self.__receive_frame_until_commands(['PROPERTY WRITTEN', 'ERROR']))
 
+    def read_datalog_properties(self, from_: datetime.datetime = None, to: datetime.datetime = None) -> Tuple[SIStatus, List[str]]:
+        """
+        This method is used to retrieve the list of IDs of all properties for whom data is logged on the gateway. If a time window is given using from and to, only data in this
+        time windows is considered.
+
+        :param from_: Optional date and time of the start of the time window to be considered.
+        :param to: Optional date and time of the end of the time window to be considered.
+        :return: Returns two values: 1: Status of the operation, 2: List of all properties for whom data is logged on the gateway in the optional time window.
+        :raises SIProtocolError: On a connection, protocol of framing error.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send READ DATALOG message to gateway.
+        self.__ws.send(super(SIGatewayClient, self).encode_read_datalog_frame(None, from_, to, None))
+
+        # Wait for DATALOG READ message, decode it and return data.
+        status, _, _, parameters = super(SIGatewayClient, self).decode_datalog_read_frame(self.__receive_frame_until_commands(['DATALOG READ', 'ERROR']))
+        return status, parameters.splitlines()
+
+
     def read_datalog_csv(self, property_id: str, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> Tuple[SIStatus, str, int, str]:
         """
         This method is used to retrieve all or a subset of logged data of a given property from the gateway.
@@ -942,6 +966,16 @@ class SIAsyncGatewayClientCallbacks:
         """
         pass
 
+    def on_datalog_properties_read(self, status: SIStatus, properties: List[str]) -> None:
+        """
+        Called when the datalog property list operation started using read_datalog_properties() has completed on the gateway.
+
+        :param status: Status of the operation.
+        :param properties: List of the IDs of the properties for whom data is available in the data log.
+        """
+
+        pass
+
     def on_datalog_read_csv(self, status: SIStatus, property_id: str, count: int, values: str) -> None:
         """
         Called when the datalog read operation started using read_datalog() has completed on the gateway. This version of the method returns the data in CSV format suitable to
@@ -952,6 +986,7 @@ class SIAsyncGatewayClientCallbacks:
         :param count: Number of entries.
         :param values: Properties data in CSV format whereas the first column is the date and time in ISO 8601 extended format and the second column contains the actual values.
         """
+
         pass
 
     def on_device_message(self, message: SIDeviceMessage) -> None:
@@ -1083,6 +1118,13 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         The callback takes two parameters: 1: the ID of the property that has updated, 2: the actual value.
         """
 
+        self.on_datalog_properties_read: Optional[Callable[[SIStatus, List[str]], None]] = None
+        """
+        Called when the datalog property list operation started using read_datalog_properties() has completed on the gateway.
+
+        The callback takes 2 parameters: 1: Status of the operation, 2: List of the IDs of the properties for whom data is available in the data log.
+        """
+
         self.on_datalog_read_csv: Optional[Callable[[str, str, int, str], None]] = None
         """
         Called when the datalog read operation started using read_datalog() has completed on the gateway. This version of the callback returns the data in CSV format suitable to 
@@ -1167,6 +1209,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             self.on_property_unsubscribed = callbacks.on_property_unsubscribed
             self.on_properties_unsubscribed = callbacks.on_properties_unsubscribed
             self.on_property_updated = callbacks.on_property_updated
+            self.on_datalog_properties_read = callbacks.on_datalog_properties_read
             self.on_datalog_read_csv = callbacks.on_datalog_read_csv
             self.on_device_message = callbacks.on_device_message
             self.on_messages_read = callbacks.on_messages_read
@@ -1355,6 +1398,24 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         # Encode and send UNSUBSCRIBE PROPERTY message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_unsubscribe_properties_frame(property_ids))
 
+    def read_datalog_properties(self, from_: datetime.datetime = None, to: datetime.datetime = None) -> None:
+        """
+        This method is used to retrieve the list of IDs of all properties for whom data is logged on the gateway. If a time window is given using from and to, only data in this
+        time windows is considered.
+
+        The status of the operation is the list of properties for whom logged data is available are reported using the on_datalog_properties_read() callback.
+
+        :param from_: Optional date and time of the start of the time window to be considered.
+        :param to: Optional date and time of the end of the time window to be considered.
+        :raises SIProtocolError: On a connection, protocol of framing error.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send READ DATALOG message to gateway.
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_datalog_frame(None, from_, to, None))
+
     def read_datalog(self, property_id: str, from_: datetime.datetime = None, to: datetime.datetime = None, limit: int = None) -> None:
         """
         This method is used to retrieve all or a subset of logged data of a given property from the gateway.
@@ -1482,8 +1543,12 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                         self.on_property_updated(id_, value)
                 elif command == 'DATALOG READ':
                     status, id_, count, values = super(SIAsyncGatewayClient, self).decode_datalog_read_frame(frame)
-                    if callable(self.on_datalog_read_csv):
-                        self.on_datalog_read_csv(status, id_, count, values)
+                    if id_ is None:
+                        if callable(self.on_datalog_properties_read):
+                            self.on_datalog_properties_read(status, values.splitlines())
+                    else:
+                        if callable(self.on_datalog_read_csv):
+                            self.on_datalog_read_csv(status, id_, count, values)
                 elif command == 'DEVICE MESSAGE':
                     message = super(SIAsyncGatewayClient, self).decode_device_message_frame(frame)
                     if callable(self.on_device_message):
