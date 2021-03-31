@@ -1468,7 +1468,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         if self.__state != state:
             raise SIProtocolError("invalid client state")
 
-    def __on_open(self) -> None:
+    def __on_open(self, ws) -> None:
         # Change state to AUTHORIZING.
         self.__state = SIConnectionState.AUTHORIZING
 
@@ -1478,7 +1478,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         else:
             self.__ws.send(super(SIAsyncGatewayClient, self).encode_authorize_frame_with_credentials(self.__user, self.__password))
 
-    def __on_message(self, frame: str) -> None:
+    def __on_message(self, ws, frame: str) -> None:
 
         # Determine the actual command.
         command = super(SIAsyncGatewayClient, self).peek_frame_command(frame)
@@ -1564,11 +1564,11 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             if callable(self.on_error):
                 self.on_error(error)
 
-    def __on_error(self, error: Exception) -> None:
+    def __on_error(self, ws, error: Exception) -> None:
         if callable(self.on_error):
             self.on_error(SIProtocolError(error.args[1]))
 
-    def __on_close(self) -> None:
+    def __on_close(self, ws) -> None:
         # Change state to DISCONNECTED.
         self.__state = SIConnectionState.DISCONNECTED
 
