@@ -215,7 +215,7 @@ class SIPropertyReadResult:
     def from_dict(d: dict) -> SIPropertyReadResult:
         try:
             result = SIPropertyReadResult(SIStatus.from_string(d['status']), d['id'], None)
-            if 'value' in d:
+            if 'value' in d and d['value'] is not None:
                 try:
                     result.value = float(d['value'])
                 except ValueError:
