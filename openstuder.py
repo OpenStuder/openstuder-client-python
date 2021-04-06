@@ -1563,6 +1563,9 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         except SIProtocolError as error:
             if callable(self.on_error):
                 self.on_error(error)
+            if self.__state == SIConnectionState.AUTHORIZING:
+                self.__ws.close()
+                self.__state = SIConnectionState.DISCONNECTED
 
     def __on_error(self, ws, error: Exception) -> None:
         if callable(self.on_error):
