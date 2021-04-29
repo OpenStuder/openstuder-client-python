@@ -1087,5 +1087,41 @@ count:2
             _SIAbstractGatewayClient.decode_messages_read_frame('MESSAGES READ')
 
 
+class FINDPROPERTIESFrame(unittest.TestCase):
+    def test_encode(self):
+        frame = _SIAbstractGatewayClient.encode_find_properties_frame('*.*.3136')
+        self.assertEqual('FIND PROPERTIES\nid:*.*.3136\n\n', frame)
+
+
+class PROPERTIESFOUNDFrame(unittest.TestCase):
+    def test_decode_success(self):
+        status, property_id, count, properties = _SIAbstractGatewayClient.decode_properties_found_frame('PROPERTIES FOUND\nstatus:Success\nid:*.*.3136\ncount:2\n\n["demo.inv.3136", "demo2.inv.3136"]')
+        self.assertEqual(SIStatus.SUCCESS, status)
+        self.assertEqual("*.*.3136", property_id)
+        self.assertEqual(2, count)
+        self.assertEqual(2, len(properties))
+        self.assertEqual('demo.inv.3136', properties[0])
+        self.assertEqual('demo2.inv.3136', properties[1])
+
+    def test_decode_frame_error(self):
+        with self.assertRaises(SIProtocolError) as context:
+            _SIAbstractGatewayClient.decode_properties_found_frame('ERROR\nreason:test\n\n')
+        self.assertEqual('test', context.exception.reason())
+
+    def test_decode_invalid_frame(self):
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPETIES FOUND\nstatus:Success\nid:*.*.3136\ncount:2\n\n["demo.inv.3136", "demo2.inv.3136"]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES FOUND\nstatus:Success\nid:*.*.3136\ncount:2\n["demo.inv.3136", "demo2.inv.3136"]')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES FOUND\nstatus:Success\nid:*.*.3136\ncount:2\n\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES FOUND\n\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES FOUND\n')
+        with self.assertRaises(SIProtocolError):
+            _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES FOUND')
+
+
 if __name__ == '__main__':
     unittest.main()

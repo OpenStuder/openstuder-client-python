@@ -338,6 +338,25 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error during description')
 
     @staticmethod
+    def encode_find_properties_frame(property_id: str) -> str:
+        return 'FIND PROPERTIES\nid:{property_id}\n\n'.format(property_id=property_id)
+
+    @staticmethod
+    def decode_properties_found_frame(frame: str) -> (SIStatus, str, int, List[str]):
+        command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
+        if command == 'PROPERTIES FOUND' and 'status' in headers:
+            status = SIStatus.from_string(headers['status'])
+            if status == SIStatus.SUCCESS:
+                properties = json.loads(body)
+                return status, headers.get('id'), int(headers.get('count', 0)), properties
+            else:
+                return status, headers.get('id'), int(headers.get('count', 0)), []
+        elif command == 'ERROR':
+            raise SIProtocolError(headers['reason'])
+        else:
+            raise SIProtocolError('unknown error during finding properties')
+
+    @staticmethod
     def encode_read_property_frame(property_id: str) -> str:
         return 'READ PROPERTY\nid:{property_id}\n\n'.format(property_id=property_id)
 
@@ -696,6 +715,30 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         # Wait for DESCRIPTION message, decode it and return data.
         return super(SIGatewayClient, self).decode_description_frame(self.__receive_frame_until_commands(['DESCRIPTION', 'ERROR']))
 
+    def find_properties(self, property_id: str):
+        """
+        This method is used to retrieve a list of existing properties that match the given property ID in the form "<device access ID>.<device ID>.<property ID>". The wildcard
+        character "*" is supported for <device access ID> and <device ID> fields.
+
+        For example "*.inv.3136" represents all properties with ID 3136 on the device with ID "inv" connected through any device access, "demo.*.3136" represents all properties
+        with ID 3136 on any device that disposes that property connected through the device access "demo" and finally "*.*.3136" represents all properties with ID 3136 on any
+        device that disposes that property connected through any device access.
+
+        :param property_id: The search wildcard ID.
+        :return: Returns four values: 1: Status of the find operation, 2: the searched ID (including wildcard character), 3: the number of properties found,
+                 4: List of the property IDs.
+        :raises SIProtocolError: On a connection, protocol of framing error.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send FIND PROPERTIES message to gateway.
+        self.__ws.send(super(SIGatewayClient, self).encode_find_properties_frame(property_id))
+
+        # Wait for PROPERTIES FOUND message, decode it and return data.
+        return super(SIGatewayClient, self).decode_properties_found_frame(self.__receive_frame_until_commands(['PROPERTIES FOUND', 'ERROR']))
+
     def read_property(self, property_id: str) -> Tuple[SIStatus, str, Optional[any]]:
         """
         This method is used to retrieve the actual value of a given property from the connected gateway. The property is identified by the property_id parameter.
@@ -896,6 +939,17 @@ class SIAsyncGatewayClientCallbacks:
         """
         pass
 
+    def on_properties_found(self, status: SIStatus, id_: Optional[str], count: int, properties: List[str]):
+        """
+        Called when the gateway returned the list of found properties requested using the find_properties() method.
+
+        :param status:  Status of the find operation.
+        :param id_: The searched ID (including wildcard character).
+        :param count: The number of properties found.
+        :param properties: List of the property IDs.
+        """
+        pass
+
     def on_property_read(self, status: SIStatus, property_id: str, value: Optional[any]) -> None:
         """
         Called when the property read operation started using read_property() has completed on the gateway.
@@ -1062,6 +1116,14 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         The callback takes three parameters: 1: Status of the operation, 2: the subject's ID, 3: the description object.
         """
 
+        self.on_properties_found: Optional[Callable[[SIStatus, Optional[str], int, List[str]], None]] = None
+        """
+        Called when the gateway returned the list of found properties requested using the find_properties() method.
+
+        The callback takes four parameters: 1: Status of the find operation, 2: the searched ID (including wildcard character), 3: the number of properties found,
+        4: List of the property IDs.
+        """
+
         self.on_property_read: Optional[Callable[[str, str, Optional[any]], None]] = None
         """
         Called when the property read operation started using read_property() has completed on the gateway.
@@ -1201,6 +1263,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             self.on_error = callbacks.on_error
             self.on_enumerated = callbacks.on_enumerated
             self.on_description = callbacks.on_description
+            self.on_properties_found = callbacks.on_properties_found
             self.on_property_read = callbacks.on_property_read
             self.on_properties_read = callbacks.on_properties_read
             self.on_property_written = callbacks.on_property_written
@@ -1277,6 +1340,27 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 
         # Encode and send DESCRIBE message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_describe_frame(device_access_id, device_id, property_id, flags))
+
+    def find_properties(self, property_id: str) -> None:
+        """
+        This method is used to retrieve a list of existing properties that match the given property ID in the form "<device access ID>.<device ID>.<property ID>". The wildcard
+        character "*" is supported for <device access ID> and <device ID> fields.
+
+        For example "*.inv.3136" represents all properties with ID 3136 on the device with ID "inv" connected through any device access, "demo.*.3136" represents all properties
+        with ID 3136 on any device that disposes that property connected through the device access "demo" and finally "*.*.3136" represents all properties with ID 3136 on any
+        device that disposes that property connected through any device access.
+
+        The status of the read operation and the actual value of the property are reported using the on_properties_found() callback.
+
+        :param property_id: The search wildcard ID.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send READ PROPERTY message to gateway.
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_find_properties_frame(property_id))
 
     def read_property(self, property_id: str) -> None:
         """
@@ -1509,6 +1593,10 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     status, id_, description = super(SIAsyncGatewayClient, self).decode_description_frame(frame)
                     if callable(self.on_description):
                         self.on_description(status, id_, description)
+                elif command == 'PROPERTIES FOUND':
+                    status, id_, count, list = super(SIAsyncGatewayClient, self).decode_properties_found_frame(frame)
+                    if callable(self.on_properties_found):
+                        self.on_properties_found(status, id_, count, list)
                 elif command == 'PROPERTY READ':
                     result = super(SIAsyncGatewayClient, self).decode_property_read_frame(frame)
                     if callable(self.on_property_read):
