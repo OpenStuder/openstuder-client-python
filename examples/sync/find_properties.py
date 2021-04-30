@@ -1,4 +1,4 @@
-from openstuder import SIGatewayClient, SIProtocolError, SIDescriptionFlags
+from openstuder import SIGatewayClient, SIProtocolError
 
 try:
     client = SIGatewayClient()

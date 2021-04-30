@@ -1,4 +1,4 @@
-from openstuder import SIAsyncGatewayClient, SIProtocolError, SIStatus, SIDescriptionFlags
+from openstuder import SIAsyncGatewayClient, SIProtocolError, SIStatus
 
 
 def on_error(error: SIProtocolError):
