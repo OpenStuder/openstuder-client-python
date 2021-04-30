@@ -715,7 +715,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         # Wait for DESCRIPTION message, decode it and return data.
         return super(SIGatewayClient, self).decode_description_frame(self.__receive_frame_until_commands(['DESCRIPTION', 'ERROR']))
 
-    def find_properties(self, property_id: str):
+    def find_properties(self, property_id: str) -> Tuple[SIStatus, str, int, List[str]]:
         """
         This method is used to retrieve a list of existing properties that match the given property ID in the form "<device access ID>.<device ID>.<property ID>". The wildcard
         character "*" is supported for <device access ID> and <device ID> fields.
@@ -939,7 +939,7 @@ class SIAsyncGatewayClientCallbacks:
         """
         pass
 
-    def on_properties_found(self, status: SIStatus, id_: Optional[str], count: int, properties: List[str]):
+    def on_properties_found(self, status: SIStatus, id_: str, count: int, properties: List[str]):
         """
         Called when the gateway returned the list of found properties requested using the find_properties() method.
 
@@ -1116,7 +1116,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         The callback takes three parameters: 1: Status of the operation, 2: the subject's ID, 3: the description object.
         """
 
-        self.on_properties_found: Optional[Callable[[SIStatus, Optional[str], int, List[str]], None]] = None
+        self.on_properties_found: Optional[Callable[[SIStatus, str, int, List[str]], None]] = None
         """
         Called when the gateway returned the list of found properties requested using the find_properties() method.
 
