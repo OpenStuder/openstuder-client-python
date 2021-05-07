@@ -292,7 +292,7 @@ class _SIAbstractGatewayClient:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'ENUMERATED' and 'status' in headers and 'device_count' in headers:
             return SIStatus.from_string(headers['status']), int(headers['device_count'])
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during device enumeration')
@@ -332,7 +332,7 @@ class _SIAbstractGatewayClient:
                 return status, headers.get('id', None), description
             else:
                 return status, headers.get('id', None), {}
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during description')
@@ -351,7 +351,7 @@ class _SIAbstractGatewayClient:
                 return status, headers.get('id'), int(headers.get('count', 0)), properties
             else:
                 return status, headers.get('id'), int(headers.get('count', 0)), []
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during finding properties')
@@ -379,7 +379,7 @@ class _SIAbstractGatewayClient:
                 return SIPropertyReadResult(status, headers['id'], value)
             else:
                 return SIPropertyReadResult(status, headers['id'], None)
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during property read')
@@ -417,7 +417,7 @@ class _SIAbstractGatewayClient:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'PROPERTY WRITTEN' and 'status' in headers and 'id' in headers:
             return SIStatus.from_string(headers['status']), headers['id']
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during property write')
@@ -431,7 +431,7 @@ class _SIAbstractGatewayClient:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'PROPERTY SUBSCRIBED' and 'status' in headers and 'id' in headers:
             return SIStatus.from_string(headers['status']), headers['id']
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during property subscribe')
@@ -459,7 +459,7 @@ class _SIAbstractGatewayClient:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'PROPERTY UNSUBSCRIBED' and 'status' in headers and 'id' in headers:
             return SIStatus.from_string(headers['status']), headers['id']
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during property unsubscribe')
@@ -493,7 +493,7 @@ class _SIAbstractGatewayClient:
                 else:
                     value = string
             return headers['id'], value
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error receiving property update')
@@ -515,7 +515,7 @@ class _SIAbstractGatewayClient:
         command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'DATALOG READ' and 'status' in headers and 'count' in headers:
             return SIStatus.from_string(headers['status']), headers.get('id'), int(headers['count']), body
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error receiving datalog read')
@@ -540,7 +540,7 @@ class _SIAbstractGatewayClient:
                 return status, int(headers['count']), messages
             else:
                 return status, int(headers['count']), []
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during description')
@@ -550,7 +550,7 @@ class _SIAbstractGatewayClient:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'DEVICE MESSAGE' and 'access_id' in headers and 'device_id' in headers and 'message_id' in headers and 'message' in headers and 'timestamp' in headers:
             return SIDeviceMessage.from_dict(headers)
-        elif command == 'ERROR':
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error receiving device message')
