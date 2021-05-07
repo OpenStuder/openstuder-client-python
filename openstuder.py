@@ -344,7 +344,7 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def decode_properties_found_frame(frame: str) -> (SIStatus, str, int, List[str]):
         command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
-        if command == 'PROPERTIES FOUND' and 'status' in headers:
+        if command == 'PROPERTIES FOUND' and 'status' in headers and 'id' in headers and 'count' in headers:
             status = SIStatus.from_string(headers['status'])
             if status == SIStatus.SUCCESS:
                 properties = json.loads(body)
