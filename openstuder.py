@@ -391,10 +391,13 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def decode_properties_read_frame(frame: str) -> List[SIPropertyReadResult]:
         command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
-        if command == 'PROPERTIES READ' and 'status' in headers and headers['status'] == "Success":
-            results = json.loads(body, object_hook=SIPropertyReadResult.from_dict)
-            return results
-        elif command == 'ERROR':
+        if command == 'PROPERTIES READ' and 'status' in headers:
+            status = SIStatus.from_string(headers['status'])
+            if status == SIStatus.SUCCESS:
+                return json.loads(body, object_hook=SIPropertyReadResult.from_dict)
+            else:
+                raise SIProtocolError(f'error during property read, status={headers["status"]}')
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
             raise SIProtocolError('unknown error during properties read')
@@ -443,12 +446,16 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def decode_properties_subscribed_frame(frame: str) -> List[SIPropertySubscriptionResult]:
         command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
-        if command == 'PROPERTIES SUBSCRIBED' and 'status' in headers and headers['status'] == "Success":
-            return json.loads(body, object_hook=SIPropertySubscriptionResult.from_dict)
-        elif command == 'ERROR':
+        if command == 'PROPERTIES SUBSCRIBED' and 'status' in headers:
+            status = SIStatus.from_string(headers['status'])
+            if status == SIStatus.SUCCESS:
+                return json.loads(body, object_hook=SIPropertySubscriptionResult.from_dict)
+            else:
+                raise SIProtocolError(f'error during properties read, status={headers["status"]}')
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
-            raise SIProtocolError('unknown error during properties read')
+            raise SIProtocolError('unknown error during properties subscribe')
 
     @staticmethod
     def encode_unsubscribe_property_frame(property_id: str) -> str:
@@ -471,12 +478,16 @@ class _SIAbstractGatewayClient:
     @staticmethod
     def decode_properties_unsubscribed_frame(frame: str) -> List[SIPropertySubscriptionResult]:
         command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
-        if command == 'PROPERTIES UNSUBSCRIBED' and 'status' in headers and headers['status'] == "Success":
-            return json.loads(body, object_hook=SIPropertySubscriptionResult.from_dict)
-        elif command == 'ERROR':
+        if command == 'PROPERTIES UNSUBSCRIBED' and 'status' in headers:
+            status = SIStatus.from_string(headers['status'])
+            if status == SIStatus.SUCCESS:
+                return json.loads(body, object_hook=SIPropertySubscriptionResult.from_dict)
+            else:
+                raise SIProtocolError(f'error during properties unsubscribe, status={headers["status"]}')
+        elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
-            raise SIProtocolError('unknown error during properties read')
+            raise SIProtocolError('unknown error during properties unsubscribe')
 
     @staticmethod
     def decode_property_update_frame(frame: str) -> Tuple[str, any]:
