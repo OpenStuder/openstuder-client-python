@@ -1253,6 +1253,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                                            on_close=self.__on_close
                                            )
 
+        # TODO: Start connection timeout.
+
         # If background mode is selected, start a daemon thread for the connection handling, otherwise take over current thread.
         if background:
             self.__thread = Thread(target=self.__ws.run_forever)
@@ -1370,7 +1372,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
-        # Encode and send READ PROPERTY message to gateway.
+        # Encode and send FIND PROPERTIES message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_find_properties_frame(property_id))
 
     def read_property(self, property_id: str) -> None:
@@ -1394,7 +1396,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         This method is used to retrieve the actual value of multiple property at the same time from the connected gateway. The properties are identified by the property_ids
         parameter.
 
-        The status of the multiple read operations and the actual value of the property are reported using the on_properties_read() callback.
+        The status of the multiple read operations and the actual value of the properties are reported using the on_properties_read() callback.
 
         :param property_ids: The IDs of the properties to read in the form '{device access ID}.{device ID}.{property ID}'.
         :raises SIProtocolError: If the client is not connected or not yet authorized.
