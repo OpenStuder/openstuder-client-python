@@ -182,7 +182,7 @@ class SIDeviceMessage:
     @staticmethod
     def from_dict(d: dict) -> SIDeviceMessage:
         try:
-            return SIDeviceMessage(d['access_id'], d['device_id'], d['message_id'], d['message'], datetime.datetime.fromisoformat(d['timestamp']))
+            return SIDeviceMessage(d['access_id'], d['device_id'], d['message_id'], d['message'], datetime.datetime.fromisoformat(d['timestamp'].replace("Z", "+00:00")))
         except KeyError:
             raise SIProtocolError('invalid json body')
 

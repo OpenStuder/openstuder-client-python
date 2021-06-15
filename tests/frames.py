@@ -943,25 +943,25 @@ count:2
         "device_id": "inv",
         "message": "AUX2 relay activation",
         "message_id": 209,
-        "timestamp": "2020-01-01T00:00:00"
+        "timestamp": "2020-01-01T00:00:00Z"
     },
     {
         "access_id": "demo",
         "device_id": "inv",
         "message": "AUX2 relay deactivation",
         "message_id": 210,
-        "timestamp": "2020-01-01T00:15:00"
+        "timestamp": "2020-01-01T00:15:00Z"
     }
 ]""")
         self.assertEqual(SIStatus.SUCCESS, status)
         self.assertEqual(2, count)
-        self.assertEqual(datetime.datetime(year=2020, month=1, day=1), messages[0].timestamp)
+        self.assertEqual(datetime.datetime(year=2020, month=1, day=1, tzinfo=datetime.timezone.utc), messages[0].timestamp)
         self.assertEqual('demo', messages[0].access_id)
         self.assertEqual('inv', messages[0].device_id)
         self.assertEqual(209, messages[0].message_id)
         self.assertEqual('AUX2 relay activation', messages[0].message)
 
-        self.assertEqual(datetime.datetime(year=2020, month=1, day=1, hour=0, minute=15), messages[1].timestamp)
+        self.assertEqual(datetime.datetime(year=2020, month=1, day=1, hour=0, minute=15, tzinfo=datetime.timezone.utc), messages[1].timestamp)
         self.assertEqual('demo', messages[1].access_id)
         self.assertEqual('inv', messages[1].device_id)
         self.assertEqual(210, messages[1].message_id)
@@ -990,14 +990,14 @@ count:2
         "device_id": "inv",
         "message": "AUX2 relay activation",
         "message_id": 209,
-        "timestamp": "2020-01-01T00:00:00"
+        "timestamp": "2020-01-01T00:00:00Z"
     },
     {
         "access_id": "demo",
         "device_id": "inv",
         "message": "AUX2 relay deactivation",
         "message_id": 210,
-        "timestamp": "2020-01-01T00:15:00"
+        "timestamp": "2020-01-01T00:15:00Z"
     }
 ]""")
         with self.assertRaises(SIProtocolError):
@@ -1010,14 +1010,14 @@ count:2
         "device_id": "inv",
         "message": "AUX2 relay activation",
         "message_id": 209,
-        "timestamp": "2020-01-01T00:00:00"
+        "timestamp": "2020-01-01T00:00:00Z"
     },
     {
         "access_id": "demo",
         "device_id": "inv",
         "message": "AUX2 relay deactivation",
         "message_id": 210,
-        "timestamp": "2020-01-01T00:15:00"
+        "timestamp": "2020-01-01T00:15:00Z"
     }
 ]""")
         with self.assertRaises(SIProtocolError):
@@ -1030,14 +1030,14 @@ status:Success
         "device_id": "inv",
         "message": "AUX2 relay activation",
         "message_id": 209,
-        "timestamp": "2020-01-01T00:00:00"
+        "timestamp": "2020-01-01T00:00:00Z"
     },
     {
         "access_id": "demo",
         "device_id": "inv",
         "message": "AUX2 relay deactivation",
         "message_id": 210,
-        "timestamp": "2020-01-01T00:15:00"
+        "timestamp": "2020-01-01T00:15:00Z"
     }
 ]""")
         with self.assertRaises(SIProtocolError):
@@ -1049,14 +1049,14 @@ status:Success
         "device_id": "inv",
         "message": "AUX2 relay activation",
         "message_id": 209,
-        "timestamp": "2020-01-01T00:00:00"
+        "timestamp": "2020-01-01T00:00:00Z"
     },
     {
         "access_id": "demo",
         "device_id": "inv",
         "message": "AUX2 relay deactivation",
         "message_id": 210,
-        "timestamp": "2020-01-01T00:15:00"
+        "timestamp": "2020-01-01T00:15:00Z"
     }
 ]""")
         with self.assertRaises(SIProtocolError):
@@ -1069,14 +1069,14 @@ count:2
         "device_id": "inv",
         "message": "AUX2 relay activation",
         "message_id": 209,
-        "timestamp": "2020-01-01T00:00:00"
+        "timestamp": "2020-01-01T00:00:00Z"
     },
     {
         "access_id": "demo",
         "device_id": "inv",
         "message": "AUX2 relay deactivation",
         "message_id": 210,
-        "timestamp": "2020-01-01T00:15:00"
+        "timestamp": "2020-01-01T00:15:00Z"
     }
 ]""")
         with self.assertRaises(SIProtocolError):
