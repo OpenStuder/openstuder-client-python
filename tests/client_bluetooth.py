@@ -34,12 +34,12 @@ class MyBluetoothCallbacks(SIBluetoothGatewayClientCallbacks):
             print(f' |- DEVICE ACCESS: {id_}')
             for key in description:
                 print(f'      |- {key} : {description[key]}')
-            client.describe('demo.inv')
+            client.describe('demo', 'inv')
         elif id_ == 'demo.inv':
             print(f' |- DEVICE: {id_}')
             for pid in description:
                 print(f'      |- {pid}')
-            client.describe(f'demo.inv.{description[0]}')
+            client.describe('demo', 'inv', description[0])
         else:
             print(f' |- PROPERTY: {id_}')
             for key in description:

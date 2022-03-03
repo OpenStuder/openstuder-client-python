@@ -2139,7 +2139,14 @@ class SIBluetoothGatewayClientCallbacks:
         pass
 
     def on_description(self, status: SIStatus, id_: Optional[str], description: any) -> None:
-        # TODO: Documentation
+        """
+        Called when the gateway returned the description requested using the describe() method.
+
+        :param status: Status of the operation.
+        :param id_: Subject's ID.
+        :param description: Description either as map in the case the description's subject is the gateway itself, a
+               device access or a property. If the subject is a device, the description is a simple list.
+        """
         pass
 
     def on_property_read(self, status: SIStatus, property_id: str, value: Optional[any]) -> None:
@@ -2293,7 +2300,15 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         """
 
         self.on_description: Optional[Callable[[SIStatus, Optional[str], any], None]] = None
-        # TODO: Documentation
+        """
+        Called when the gateway returned the description requested using the describe() method.
+
+        The callback takes three parameters: 
+        1: Status of the operation.
+        2: Subject's ID.
+        3: Description either as map in the case the description's subject is the gateway itself, a device access or a 
+        property. If the subject is a device, the description is a simple list.
+        """
 
         self.on_property_read: Optional[Callable[[SIStatus, str, Optional[any]], None]] = None
         """
@@ -2499,7 +2514,21 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         self.__tx_send(super(SIBluetoothGatewayClient, self).encode_enumerate_frame())
 
     def describe(self, device_access_id: str = None, device_id: str = None, property_id: int = None) -> None:
-        # TODO: Documentation.
+        """
+        This method can be used to retrieve information about the available devices and their properties from the
+        connected gateway. Using the optional device_access_id, device_id and property_id parameters, the method can
+        either request information about the whole topology, a particular device access instance, a device or a
+        property.
+
+        The description is reported using the on_description() callback.
+
+        :param device_access_id: Device access ID for which the description should be retrieved.
+        :param device_id: Device ID for which the description should be retrieved. Note that device_access_id must be
+               present too.
+        :param property_id: Property ID for which the description should be retrieved. Note that device_access_id and
+               device_id must be present too.
+        :raises SIProtocolError: If the client is not connected or not yet authorized.
+        """
 
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
@@ -2687,19 +2716,15 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
             self.on_disconnected()
 
     def __tx_send(self, payload: bytes):
-        #print(f'Sending message: {payload.hex()}')
-        # TODO: fragmentation depending MTU
+        # TODO: fragmentation depending MTU size
         asyncio.create_task(self.__ble.write_gatt_char(_SI_STUDER_GATEWAY_TX_UUID, bytes.fromhex('00') + payload, False))
 
     def __rx_callback(self, sender: int, payload: bytearray):
         remaining = payload[0]
         del payload[0]
-        #print(f'Received segment: {payload.hex()}, {remaining} remaining')
         self.__rx_buffer += payload
         if remaining != 0:
             return
-
-        #print(f'Received message: {self.__rx_buffer.hex()}')
 
         # Determine the actual command.
         frame = self.__rx_buffer.copy()
