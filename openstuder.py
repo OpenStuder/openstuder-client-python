@@ -1854,6 +1854,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
 _SI_STUDER_GATEWAY_SERVICE_UUID = "f3c2d800-8421-44b1-9655-0951992f313b"
 _SI_STUDER_GATEWAY_RX_UUID = "f3c2d801-8421-44b1-9655-0951992f313b"
 _SI_STUDER_GATEWAY_TX_UUID = "f3c2d802-8421-44b1-9655-0951992f313b"
+_SI_STUDER_GATEWAY_MAX_FRAGMENT_SIZE = 508
 
 
 class _SIAbstractBluetoothGatewayClient:
@@ -2251,11 +2252,12 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
     easily discovered.
     """
 
-    def __init__(self):
+    def __init__(self, max_fragment_size: int = _SI_STUDER_GATEWAY_MAX_FRAGMENT_SIZE):
         super(SIBluetoothGatewayClient, self).__init__()
         self.on_datalog_read_csv = None
         self.__state: SIConnectionState = SIConnectionState.DISCONNECTED
         self.__ble: Optional[BleakClient] = None
+        self.__max_fragment_size = max_fragment_size
         self.__rx_buffer: bytearray = bytearray()
         self.__thread: Optional[Thread] = None
         self.__wait_for_disconnected: Optional[asyncio.Future] = None
@@ -2716,14 +2718,22 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
             self.on_disconnected()
 
     def __tx_send(self, payload: bytes):
-        # TODO: fragmentation depending MTU size
-        asyncio.create_task(self.__ble.write_gatt_char(_SI_STUDER_GATEWAY_TX_UUID, bytes.fromhex('00') + payload, False))
+        data = bytearray(payload)
+        fragment_count = int(len(data) / self.__max_fragment_size)
+        if len(data) % self.__max_fragment_size != 0:
+            fragment_count += 1
+        while fragment_count > 0:
+            fragment_count -= 1
+            fragment = bytearray()
+            fragment.append(int(fragment_count))
+            fragment += data[0:self.__max_fragment_size]
+            del data[0:self.__max_fragment_size]
+            asyncio.create_task(self.__ble.write_gatt_char(_SI_STUDER_GATEWAY_TX_UUID, fragment, False))
 
     def __rx_callback(self, sender: int, payload: bytearray):
-        remaining = payload[0]
-        del payload[0]
-        self.__rx_buffer += payload
-        if remaining != 0:
+        remaining_fragments = payload[0]
+        self.__rx_buffer += payload[1:]
+        if remaining_fragments != 0:
             return
 
         # Determine the actual command.
