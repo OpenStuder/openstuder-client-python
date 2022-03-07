@@ -2064,7 +2064,7 @@ class _SIAbstractBluetoothGatewayClient:
         elif command_id == 0xFF and len(sequence) == 1 and isinstance(sequence[0], str):
             raise SIProtocolError(sequence[0])
         else:
-            raise SIProtocolError('unknown error during description')
+            raise SIProtocolError('unknown error during messages read')
 
     @staticmethod
     def decode_device_message_frame(frame: bytes) -> SIDeviceMessage:
@@ -2725,7 +2725,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         while fragment_count > 0:
             fragment_count -= 1
             fragment = bytearray()
-            fragment.append(int(fragment_count))
+            fragment.append(int(min(fragment_count, 255)))
             fragment += data[0:self.__max_fragment_size]
             del data[0:self.__max_fragment_size]
             asyncio.create_task(self.__ble.write_gatt_char(_SI_STUDER_GATEWAY_TX_UUID, fragment, False))
