@@ -1851,10 +1851,12 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__thread.join()
 
 
-_SI_STUDER_GATEWAY_SERVICE_UUID = "f3c2d800-8421-44b1-9655-0951992f313b"
-_SI_STUDER_GATEWAY_RX_UUID = "f3c2d801-8421-44b1-9655-0951992f313b"
-_SI_STUDER_GATEWAY_TX_UUID = "f3c2d802-8421-44b1-9655-0951992f313b"
-_SI_STUDER_GATEWAY_MAX_FRAGMENT_SIZE = 508
+_SI_BLUETOOTH_MANUFACTURER_ID = 0x025A
+_SI_BLUETOOTH_MANUFACTURER_DATA = "OSGW"
+_SI_BLUETOOTH_SERVICE_UUID = "f3c2d800-8421-44b1-9655-0951992f313b"
+_SI_BLUETOOTH_RX_UUID = "f3c2d801-8421-44b1-9655-0951992f313b"
+_SI_BLUETOOTH_TX_UUID = "f3c2d802-8421-44b1-9655-0951992f313b"
+_SI_BLUETOOTH_MAX_FRAGMENT_SIZE = 508
 
 
 class _SIAbstractBluetoothGatewayClient:
@@ -2252,7 +2254,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
     easily discovered.
     """
 
-    def __init__(self, max_fragment_size: int = _SI_STUDER_GATEWAY_MAX_FRAGMENT_SIZE):
+    def __init__(self, max_fragment_size: int = _SI_BLUETOOTH_MAX_FRAGMENT_SIZE):
         super(SIBluetoothGatewayClient, self).__init__()
         self.on_datalog_read_csv = None
         self.__state: SIConnectionState = SIConnectionState.DISCONNECTED
@@ -2399,7 +2401,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         """
 
     @staticmethod
-    def discover():
+    def discover(timeout: float = 10.0):
         """
         Discovers local OpenStuder gateways to whom a Bluetooth LE connection can be established.
 
@@ -2407,8 +2409,11 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         """
 
         addresses = []
-        for device in asyncio.run(BleakScanner.discover()):
-            if 'uuids' in device.metadata and _SI_STUDER_GATEWAY_SERVICE_UUID in device.metadata['uuids']:
+        for device in asyncio.run(BleakScanner.discover(timeout)):
+            print(device.metadata)
+            if 'uuids' in device.metadata and _SI_BLUETOOTH_SERVICE_UUID in device.metadata['uuids'] or \
+                    'manufacturer_data' in device.metadata and 0x025A in device.metadata['manufacturer_data'] and \
+                    device.metadata['manufacturer_data'][0x025A] == b'OSGW':
                 addresses.append(device.address)
         return addresses
 
@@ -2698,19 +2703,19 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
             self.on_error(SIProtocolError('Can not connect to BLE peripheral'))
             return
 
-        await self.__ble.start_notify(_SI_STUDER_GATEWAY_RX_UUID, self.__rx_callback)
+        await self.__ble.start_notify(_SI_BLUETOOTH_RX_UUID, self.__rx_callback)
 
         # Authorize client.
         self.__state = SIConnectionState.AUTHORIZING
         await self.__ble.write_gatt_char(
-            _SI_STUDER_GATEWAY_TX_UUID,
+            _SI_BLUETOOTH_TX_UUID,
             bytes.fromhex('00') + super(SIBluetoothGatewayClient, self).encode_authorize_frame_with_credentials(
                 self.__user, self.__password), False)
 
         self.__wait_for_disconnected = asyncio.Future()
         await asyncio.wait([self.__wait_for_disconnected])
 
-        await self.__ble.stop_notify(_SI_STUDER_GATEWAY_RX_UUID)
+        await self.__ble.stop_notify(_SI_BLUETOOTH_RX_UUID)
         await self.__ble.disconnect()
 
         self.__state = SIConnectionState.DISCONNECTED
@@ -2728,7 +2733,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
             fragment.append(int(min(fragment_count, 255)))
             fragment += data[0:self.__max_fragment_size]
             del data[0:self.__max_fragment_size]
-            asyncio.create_task(self.__ble.write_gatt_char(_SI_STUDER_GATEWAY_TX_UUID, fragment, False))
+            asyncio.create_task(self.__ble.write_gatt_char(_SI_BLUETOOTH_TX_UUID, fragment, False))
 
     def __rx_callback(self, sender: int, payload: bytearray):
         remaining_fragments = payload[0]
