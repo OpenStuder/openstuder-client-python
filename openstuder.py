@@ -2430,9 +2430,9 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         :param address: Bluetooth address (or UUID on macOS) to connect to. Use the discover() method to find devices.
         :param user: Username send to the gateway used for authorization.
         :param password: Password send to the gateway used for authorization.
-        :param background: If true, the handling of the WebSocket connection is done in the background, if false the
+        :param background: If true, the handling of the Bluetooth connection is done in the background, if false the
                current thread is taken over.
-        :raises SIProtocolError: If there was an error initiating the WebSocket connection.
+        :raises SIProtocolError: If there was an error initiating the Bluetooth connection.
         """
 
         # Ensure that the client is in the DISCONNECTED state.
