@@ -2410,7 +2410,6 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
 
         addresses = []
         for device in asyncio.run(BleakScanner.discover(timeout)):
-            print(device.metadata)
             if 'uuids' in device.metadata and _SI_BLUETOOTH_SERVICE_UUID in device.metadata['uuids'] or \
                     'manufacturer_data' in device.metadata and 0x025A in device.metadata['manufacturer_data'] and \
                     device.metadata['manufacturer_data'][0x025A] == b'OSGW':
