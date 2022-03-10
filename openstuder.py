@@ -1865,11 +1865,17 @@ class _SIAbstractBluetoothGatewayClient:
 
     @staticmethod
     def encode_authorize_frame_without_credentials() -> bytes:
-        return cbor2.dumps(0x01) + cbor2.dumps(None) + cbor2.dumps(None) + cbor2.dumps(1)
+        return cbor2.dumps(0x01) + \
+               cbor2.dumps(None) + \
+               cbor2.dumps(None) + \
+               cbor2.dumps(1)
 
     @staticmethod
     def encode_authorize_frame_with_credentials(user: str, password: str) -> bytes:
-        return cbor2.dumps(0x01) + cbor2.dumps(user) + cbor2.dumps(password) + cbor2.dumps(1)
+        return cbor2.dumps(0x01) + \
+               cbor2.dumps(user) + \
+               cbor2.dumps(password) + \
+               cbor2.dumps(1)
 
     @staticmethod
     def decode_authorized_frame(frame: bytes) -> Tuple[SIAccessLevel, str]:
@@ -1926,7 +1932,8 @@ class _SIAbstractBluetoothGatewayClient:
 
     @staticmethod
     def encode_read_property_frame(property_id: str) -> bytes:
-        return cbor2.dumps(0x04) + cbor2.dumps(property_id)
+        return cbor2.dumps(0x04) + \
+               cbor2.dumps(property_id)
 
     @staticmethod
     def decode_property_read_frame(frame: bytes) -> SIPropertyReadResult:
@@ -1954,7 +1961,8 @@ class _SIAbstractBluetoothGatewayClient:
 
     @staticmethod
     def encode_write_property_frame(property_id: str, value: Optional[any], flags: Optional[SIWriteFlags]) -> bytes:
-        frame = cbor2.dumps(0x05) + cbor2.dumps(property_id)
+        frame = cbor2.dumps(0x05) + \
+                cbor2.dumps(property_id)
         if flags is not None and isinstance(flags, SIWriteFlags):
             if flags & SIWriteFlags.PERMANENT:
                 frame += cbor2.dumps(1)
@@ -1977,7 +1985,8 @@ class _SIAbstractBluetoothGatewayClient:
 
     @staticmethod
     def encode_subscribe_property_frame(property_id: str) -> bytes:
-        return cbor2.dumps(0x06) + cbor2.dumps(property_id)
+        return cbor2.dumps(0x06) +\
+               cbor2.dumps(property_id)
 
     @staticmethod
     def decode_property_subscribed_frame(frame: bytes) -> Tuple[SIStatus, str]:
@@ -1991,7 +2000,8 @@ class _SIAbstractBluetoothGatewayClient:
 
     @staticmethod
     def encode_unsubscribe_property_frame(property_id: str) -> bytes:
-        return cbor2.dumps(0x07) + cbor2.dumps(property_id)
+        return cbor2.dumps(0x07) + \
+               cbor2.dumps(property_id)
 
     @staticmethod
     def decode_property_unsubscribed_frame(frame: bytes) -> Tuple[SIStatus, str]:
@@ -2026,7 +2036,11 @@ class _SIAbstractBluetoothGatewayClient:
     @staticmethod
     def encode_read_datalog_frame(property_id: Optional[str], from_: Optional[datetime.datetime],
                                   to: Optional[datetime.datetime], limit: Optional[int]) -> bytes:
-        return cbor2.dumps(0x08) + cbor2.dumps(property_id) + cbor2.dumps(from_) + cbor2.dumps(to) + cbor2.dumps(limit)
+        return cbor2.dumps(0x08) + \
+               cbor2.dumps(property_id) + \
+               cbor2.dumps(_SIAbstractBluetoothGatewayClient.get_timestamp_if_present(from_)) + \
+               cbor2.dumps(_SIAbstractBluetoothGatewayClient.get_timestamp_if_present(to)) + \
+               cbor2.dumps(limit)
 
     @staticmethod
     def decode_datalog_read_frame(frame: bytes) -> Tuple[SIStatus, Optional[str], int, any]:
@@ -2043,7 +2057,10 @@ class _SIAbstractBluetoothGatewayClient:
     @staticmethod
     def encode_read_messages_frame(from_: Optional[datetime.datetime], to: Optional[datetime.datetime],
                                    limit: Optional[int]) -> bytes:
-        return cbor2.dumps(0x09) + cbor2.dumps(from_) + cbor2.dumps(to) + cbor2.dumps(limit)
+        return cbor2.dumps(0x09) + \
+               cbor2.dumps(_SIAbstractBluetoothGatewayClient.get_timestamp_if_present(from_)) + \
+               cbor2.dumps(_SIAbstractBluetoothGatewayClient.get_timestamp_if_present(to)) + \
+               cbor2.dumps(limit)
 
     @staticmethod
     def decode_messages_read_frame(frame: bytes) -> Tuple[SIStatus, int, List[SIDeviceMessage]]:
@@ -2099,6 +2116,13 @@ class _SIAbstractBluetoothGatewayClient:
         except cbor2.CBORDecodeError:
             raise SIProtocolError('invalid frame')
         return command, sequence
+
+    @staticmethod
+    def get_timestamp_if_present(timestamp: Optional[datetime.datetime]) -> Optional[int]:
+        if timestamp is not None and isinstance(timestamp, datetime.datetime):
+            return int(timestamp.timestamp())
+        else:
+            return None
 
 
 class SIBluetoothGatewayClientCallbacks:
