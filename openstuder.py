@@ -2440,7 +2440,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
                 addresses.append(device.address)
         return addresses
 
-    def connect(self, address, user: str = None, password: str = None, background: bool = True) -> None:
+    def connect(self, address, user: str = None, password: str = None, background: bool = True, timeout: int = 25) -> None:
         """
         Establishes the Bluetooth LE connection to the OpenStuder gateway and executes the user authorization process
         once the connection has been established in the background. This method returns immediately and does not block
@@ -2455,6 +2455,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         :param password: Password send to the gateway used for authorization.
         :param background: If true, the handling of the Bluetooth connection is done in the background, if false the
                current thread is taken over.
+        :param timeout: Connection timeout.
         :raises SIProtocolError: If there was an error initiating the Bluetooth connection.
         """
 
@@ -2470,11 +2471,11 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
 
         # In background mode, start a daemon thread for the connection handling, otherwise take over current thread.
         if background:
-            self.__thread = Thread(target=asyncio.run(self.__run()))
+            self.__thread = Thread(target=asyncio.run(self.__run(timeout)))
             self.__thread.setDaemon(True)
             self.__thread.start()
         else:
-            asyncio.run(self.__run())
+            asyncio.run(self.__run(timeout))
 
     def set_callbacks(self, callbacks: SIBluetoothGatewayClientCallbacks) -> None:
         """
@@ -2719,10 +2720,10 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         # Close the Bluetooth connection.
         self.__wait_for_disconnected.cancel()
 
-    async def __run(self):
+    async def __run(self, timeout: int):
         # Connect to Bluetooth LE peripheral.
         self.__state = SIConnectionState.CONNECTING
-        if not await self.__ble.connect():
+        if not await self.__ble.connect(timeout=timeout):
             self.on_error(SIProtocolError('Can not connect to BLE peripheral'))
             return
 
