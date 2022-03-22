@@ -2283,6 +2283,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         self.on_datalog_read_csv = None
         self.__state: SIConnectionState = SIConnectionState.DISCONNECTED
         self.__ble: Optional[BleakClient] = None
+        self.__loop: asyncio.AbstractEventLoop = None
         self.__max_fragment_size = max_fragment_size
         self.__rx_buffer: bytearray = bytearray()
         self.__thread: Optional[Thread] = None
@@ -2471,7 +2472,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
 
         # In background mode, start a daemon thread for the connection handling, otherwise take over current thread.
         if background:
-            self.__thread = Thread(target=asyncio.run(self.__run(timeout)))
+            self.__thread = Thread(target=lambda:asyncio.run(self.__run(timeout)))
             self.__thread.setDaemon(True)
             self.__thread.start()
         else:
@@ -2721,6 +2722,8 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         self.__wait_for_disconnected.cancel()
 
     async def __run(self, timeout: int):
+        self.__loop = asyncio.get_event_loop()
+
         # Connect to Bluetooth LE peripheral.
         self.__state = SIConnectionState.CONNECTING
         if not await self.__ble.connect(timeout=timeout):
@@ -2757,7 +2760,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
             fragment.append(int(min(fragment_count, 255)))
             fragment += data[0:self.__max_fragment_size]
             del data[0:self.__max_fragment_size]
-            asyncio.create_task(self.__ble.write_gatt_char(_SI_BLUETOOTH_TX_UUID, fragment, False))
+            self.__loop.create_task(self.__ble.write_gatt_char(_SI_BLUETOOTH_TX_UUID, fragment, False))
 
     def __rx_callback(self, sender: int, payload: bytearray):
         remaining_fragments = payload[0]
