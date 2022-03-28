@@ -8,6 +8,7 @@ import websocket
 import cbor2
 import io
 import asyncio
+import threading
 from bleak import BleakScanner, BleakClient
 
 
@@ -1193,21 +1194,21 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         """
         Called when the connection to the OpenStuder gateway has been gracefully closed by either side or the 
         connection was lost by any other reason.
-        
+
         This callback has no parameters.
         """
 
         self.on_error: Optional[Callable[[Exception], None]] = None
         """
         Called on severe errors.
-        
+
         The single parameter passed to the callback is the exception that caused the erroneous behavior.
         """
 
         self.on_enumerated: Optional[Callable[[SIStatus, int], None]] = None
         """
         Called when the enumeration operation started using enumerate() has completed on the gateway.
-        
+
         The callback takes two arguments. 
         1: operation status, 
         2: the number of devices present.
@@ -1216,7 +1217,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.on_description: Optional[Callable[[SIStatus, Optional[str], object], None]] = None
         """
         Called when the gateway returned the description requested using the describe() method.
-        
+
         The callback takes three parameters: 
         1: Status of the operation, 
         2: the subject's ID, 
@@ -1237,7 +1238,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.on_property_read: Optional[Callable[[SIStatus, str, Optional[any]], None]] = None
         """
         Called when the property read operation started using read_property() has completed on the gateway.
-        
+
         The callback takes three parameters: 
         1: Status of the read operation, 
         2: the ID of the property read, 
@@ -1255,7 +1256,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.on_property_written: Optional[Callable[[SIStatus, str], None]] = None
         """
         Called when the property write operation started using write_property() has completed on the gateway.
-        
+
         The callback takes two parameters: 
         1: Status of the write operation, 
         2: the ID of the property written.
@@ -1265,7 +1266,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         """
         Called when the gateway returned the status of the property subscription requested using the 
         subscribe_to_property() method.
-        
+
         The callback takes two parameters: 
         1: The status of the subscription, 
         2: The ID of the property.
@@ -1302,7 +1303,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.on_property_updated: Optional[Callable[[str, any], None]] = None
         """
         This callback is called whenever the gateway send a property update.
-        
+
         The callback takes two parameters: 
         1: the ID of the property that has updated, 
         2: the actual value.
@@ -1322,7 +1323,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         """
         Called when the datalog read operation started using read_datalog() has completed on the gateway. This version 
         of the callback returns the data in CSV format suitable to be written to a file.
-        
+
         The callback takes four parameters: 
         1: Status of the operation, 
         2: ID of the property, 
@@ -1334,7 +1335,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.on_device_message: Optional[Callable[[SIDeviceMessage], None]] = None
         """
         This callback is called whenever the gateway send a device message indication.
-        
+
         The callback takes one parameter, the device message object.
         """
 
@@ -1923,7 +1924,8 @@ class _SIAbstractBluetoothGatewayClient:
     @staticmethod
     def decode_description_frame(frame: bytes) -> Tuple[SIStatus, Optional[str], any]:
         command_id, sequence = _SIAbstractBluetoothGatewayClient.decode_frame(frame)
-        if command_id == 0x83 and len(sequence) == 3 and isinstance(sequence[0], int) and (isinstance(sequence[1], str) or sequence[1] is None):
+        if command_id == 0x83 and len(sequence) == 3 and isinstance(sequence[0], int) and \
+                (isinstance(sequence[1], str) or sequence[1] is None):
             return SIStatus.from_ordinal(sequence[0]), sequence[1], sequence[2]
         elif command_id == 0xFF and len(sequence) == 1 and isinstance(sequence[0], str):
             raise SIProtocolError(sequence[0])
@@ -1985,7 +1987,7 @@ class _SIAbstractBluetoothGatewayClient:
 
     @staticmethod
     def encode_subscribe_property_frame(property_id: str) -> bytes:
-        return cbor2.dumps(0x06) +\
+        return cbor2.dumps(0x06) + \
                cbor2.dumps(property_id)
 
     @staticmethod
@@ -2074,7 +2076,13 @@ class _SIAbstractBluetoothGatewayClient:
                 if len(array) == 5 * count:
                     messages = []
                     for i in range(count):
-                        messages.append(SIDeviceMessage(array[5 * i + 1], array[5 * i + 2], array[5 * i + 3], array[5 * i + 4], datetime.datetime.fromtimestamp(array[5 * i])))
+                        messages.append(
+                            SIDeviceMessage(
+                                array[5 * i + 1],
+                                array[5 * i + 2],
+                                array[5 * i + 3],
+                                array[5 * i + 4],
+                                datetime.datetime.fromtimestamp(array[5 * i])))
                     return status, count, messages
                 else:
                     return status, count, []
@@ -2235,7 +2243,8 @@ class SIBluetoothGatewayClientCallbacks:
 
         pass
 
-    def on_datalog_read(self, status: SIStatus, property_id: str, count: int, values: List[Tuple[datetime.datetime, any]]) -> None:
+    def on_datalog_read(self, status: SIStatus, property_id: str, count: int,
+                        values: List[Tuple[datetime.datetime, any]]) -> None:
         """
         Called when the datalog read operation started using read_datalog() has completed on the gateway. This version
         of the method returns the data in CSV format suitable to
@@ -2400,7 +2409,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         self.on_datalog_read: Optional[Callable[[SIStatus, str, int, List[Tuple[datetime, any]]], None]] = None
         """
         Called when the datalog read operation started using read_datalog() has completed on the gateway.
-    
+
         The callback takes four parameters: 
         1: Status of the operation, 
         2: ID of the property, 
@@ -2441,7 +2450,8 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
                 addresses.append(device.address)
         return addresses
 
-    def connect(self, address, user: str = None, password: str = None, background: bool = True, timeout: int = 25) -> None:
+    def connect(self, address, user: str = None, password: str = None, background: bool = True,
+                timeout: int = 25) -> None:
         """
         Establishes the Bluetooth LE connection to the OpenStuder gateway and executes the user authorization process
         once the connection has been established in the background. This method returns immediately and does not block
@@ -2472,7 +2482,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
 
         # In background mode, start a daemon thread for the connection handling, otherwise take over current thread.
         if background:
-            self.__thread = Thread(target=lambda:asyncio.run(self.__run(timeout)))
+            self.__thread = Thread(target=lambda: asyncio.run(self.__run(timeout)))
             self.__thread.setDaemon(True)
             self.__thread.start()
         else:
@@ -2719,9 +2729,13 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Close the Bluetooth connection.
-        self.__wait_for_disconnected.cancel()
+        if threading.current_thread() == self.__thread_id:
+            self.__wait_for_disconnected.cancel()
+        else:
+            self.__loop.call_soon_threadsafe(lambda: self.__wait_for_disconnected.cancel())
 
     async def __run(self, timeout: int):
+        self.__thread_id = threading.current_thread()
         self.__loop = asyncio.get_event_loop()
 
         # Connect to Bluetooth LE peripheral.
@@ -2760,7 +2774,11 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
             fragment.append(int(min(fragment_count, 255)))
             fragment += data[0:self.__max_fragment_size]
             del data[0:self.__max_fragment_size]
-            self.__loop.create_task(self.__ble.write_gatt_char(_SI_BLUETOOTH_TX_UUID, fragment, False))
+            if threading.current_thread() == self.__thread_id:
+                self.__loop.create_task(self.__ble.write_gatt_char(_SI_BLUETOOTH_TX_UUID, fragment, False))
+            else:
+                self.__loop.call_soon_threadsafe(
+                    lambda: self.__loop.create_task(self.__ble.write_gatt_char(_SI_BLUETOOTH_TX_UUID, fragment, False)))
 
     def __rx_callback(self, sender: int, payload: bytearray):
         remaining_fragments = payload[0]
