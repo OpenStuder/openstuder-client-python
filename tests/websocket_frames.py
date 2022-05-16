@@ -3,7 +3,7 @@ import random
 import string
 import unittest
 # noinspection PyProtectedMember
-from openstuder import _SIAbstractGatewayClient, SIAccessLevel, SIStatus, SIDescriptionFlags, SIWriteFlags, SIProtocolError
+from openstuder import _SIAbstractGatewayClient, SIAccessLevel, SIStatus, SIDescriptionFlags, SIWriteFlags, SIProtocolError, SIDeviceFunctions
 
 
 def random_int(start: int, end: int) -> int:
@@ -1091,6 +1091,14 @@ class FINDPROPERTIESFrame(unittest.TestCase):
     def test_encode(self):
         frame = _SIAbstractGatewayClient.encode_find_properties_frame('*.*.3136')
         self.assertEqual('FIND PROPERTIES\nid:*.*.3136\n\n', frame)
+
+    def test_encod_with_virtual(self):
+        frame = _SIAbstractGatewayClient.encode_find_properties_frame('*.*.3136', True)
+        self.assertEqual('FIND PROPERTIES\nid:*.*.3136\nvirtual:true\n\n', frame)
+
+    def test_encod_with_virtual_and_functions(self):
+        frame = _SIAbstractGatewayClient.encode_find_properties_frame('*.*.3136', True, SIDeviceFunctions.INVERTER | SIDeviceFunctions.CHARGER)
+        self.assertEqual('FIND PROPERTIES\nid:*.*.3136\nvirtual:true\nfunctions:inverter,charger\n\n', frame)
 
 
 class PROPERTIESFOUNDFrame(unittest.TestCase):

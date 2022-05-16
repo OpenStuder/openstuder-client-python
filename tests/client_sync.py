@@ -1,9 +1,9 @@
-from openstuder import SIGatewayClient, SIDescriptionFlags
+from openstuder import SIGatewayClient, SIDescriptionFlags, SIDeviceFunctions
 
 if __name__ == "__main__":
     # Establish connection.
     client = SIGatewayClient()
-    client.connect('localhost')
+    client.connect('openstuder.lan')
 
     # Client/gateway information.
     print(f'CONNECTED: access_level = {client.access_level()}, gateway_version = {client.gateway_version()}')
@@ -16,6 +16,10 @@ if __name__ == "__main__":
     status, id_, desc = client.describe(flags=SIDescriptionFlags.INCLUDE_ACCESS_INFORMATION | SIDescriptionFlags.INCLUDE_DEVICE_INFORMATION |
                                               SIDescriptionFlags.INCLUDE_PROPERTY_INFORMATION)
     print(f'DESCRIBE -> DESCRIPTION: status = {status}, id = {id_}, description={desc}')
+
+    # Find properties.
+    status, id_, count, props = client.find_properties('*.*.3136', False, SIDeviceFunctions.ALL)
+    print(f'FIND PROPERTY -> PROPERTIES FOUND: status = {status}, id = {id_}, count={count}, props={props}')
 
     # Read property.
     status, id_, value = client.read_property('demo.inv.3136')

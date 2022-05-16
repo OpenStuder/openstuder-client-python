@@ -164,6 +164,28 @@ class SIWriteFlags(Flag):
     PERMANENT = auto()
 
 
+class SIDeviceFunctions(Flag):
+    """
+        Device functions, these can be used to filter results during the find property operation. Note that a device
+        can hold multiple functions.
+
+        - **SIDeviceFunction.NONE**: No function.
+        - **SIDeviceFunction.INVERTER**: Inverter function.
+        - **SIDeviceFunction.CHARGER**: Battery charger function.
+        - **SIDeviceFunction.SOLAR**: Solar charger function.
+        - **SIDeviceFunction.TRANSFER**: AC charger function.
+        - **SIDeviceFunction.BATTERY**: Battery monitor function.
+        - **SIDeviceFunction.ALL**: All functions.
+        """
+    NONE = 0
+    INVERTER = auto()
+    CHARGER = auto()
+    SOLAR = auto()
+    TRANSFER = auto()
+    BATTERY = auto()
+    ALL = auto()
+
+
 class SIProtocolError(IOError):
     """
     Class for reporting all OpenStuder protocol errors.
@@ -379,8 +401,34 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error during description')
 
     @staticmethod
-    def encode_find_properties_frame(property_id: str) -> str:
-        return 'FIND PROPERTIES\nid:{property_id}\n\n'.format(property_id=property_id)
+    def encode_find_properties_frame(property_id: str, virtual: Optional[bool] = None,
+                                     functions: Optional[SIDeviceFunctions] = None) -> str:
+        frame = 'FIND PROPERTIES\nid:{property_id}\n'.format(property_id=property_id)
+        if virtual is not None and isinstance(virtual, bool):
+            frame += 'virtual:'
+            if virtual:
+                frame += 'true'
+            else:
+                frame += 'false'
+            frame += '\n'
+        if functions is not None and isinstance(functions, SIDeviceFunctions):
+            frame += 'functions:'
+            if functions & SIDeviceFunctions.INVERTER:
+                frame += 'inverter,'
+            if functions & SIDeviceFunctions.CHARGER:
+                frame += 'charger,'
+            if functions & SIDeviceFunctions.SOLAR:
+                frame += 'solar,'
+            if functions & SIDeviceFunctions.TRANSFER:
+                frame += 'transfer,'
+            if functions & SIDeviceFunctions.BATTERY:
+                frame += 'battery,'
+            if functions & SIDeviceFunctions.ALL:
+                frame += 'all,'
+            frame = frame[:-1]
+            frame += '\n'
+        frame += '\n'
+        return frame
 
     @staticmethod
     def decode_properties_found_frame(frame: str) -> (SIStatus, str, int, List[str]):
@@ -781,7 +829,8 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         return super(SIGatewayClient, self).decode_description_frame(
             self.__receive_frame_until_commands(['DESCRIPTION', 'ERROR']))
 
-    def find_properties(self, property_id: str) -> Tuple[SIStatus, str, int, List[str]]:
+    def find_properties(self, property_id: str, virtual: Optional[bool], functions_mask: Optional[SIDeviceFunctions]) \
+            -> Tuple[SIStatus, str, int, List[str]]:
         """
         This method is used to retrieve a list of existing properties that match the given property ID in the form
         "<device access ID>.<device ID>.<property ID>". The wildcard character "*" is supported for <device access ID>
@@ -793,6 +842,9 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         3136 on any device that disposes that property connected through any device access.
 
         :param property_id: The search wildcard ID.
+        :param virtual: Optional to filter for virtual devices (true) or non-virtual devices (false, default).
+        :param functions_mask: Optional to filter for device functions. See SIDeviceFunctions for details. Defaults
+               to all functions (SIDeviceFunctions.ALL).
         :return: Returns four values: 1: Status of the find operation, 2: the searched ID (including wildcard
                  character), 3: the number of properties found, 4: List of the property IDs.
         :raises SIProtocolError: On a connection, protocol of framing error.
@@ -802,7 +854,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send FIND PROPERTIES message to gateway.
-        self.__ws.send(super(SIGatewayClient, self).encode_find_properties_frame(property_id))
+        self.__ws.send(super(SIGatewayClient, self).encode_find_properties_frame(property_id, virtual, functions_mask))
 
         # Wait for PROPERTIES FOUND message, decode it and return data.
         return super(SIGatewayClient, self).decode_properties_found_frame(
@@ -1493,7 +1545,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_describe_frame(device_access_id, device_id,
                                                                                property_id, flags))
 
-    def find_properties(self, property_id: str) -> None:
+    def find_properties(self, property_id: str, virtual: Optional[bool], functions_mask: Optional[SIDeviceFunctions]) \
+            -> None:
         """
         This method is used to retrieve a list of existing properties that match the given property ID in the form
         "<device access ID>.<device ID>.<property ID>". The wildcard character "*" is supported for <device access ID>
@@ -1508,6 +1561,9 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         on_properties_found() callback.
 
         :param property_id: The search wildcard ID.
+        :param virtual: Optional to filter for virtual devices (true) or non-virtual devices (false, default).
+        :param functions_mask: Optional to filter for device functions. See SIDeviceFunctions for details. Defaults
+               to all functions (SIDeviceFunctions.ALL).
         :raises SIProtocolError: If the client is not connected or not yet authorized.
         """
 
@@ -1515,7 +1571,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send FIND PROPERTIES message to gateway.
-        self.__ws.send(super(SIAsyncGatewayClient, self).encode_find_properties_frame(property_id))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_find_properties_frame(property_id, virtual,
+                                                                                      functions_mask))
 
     def read_property(self, property_id: str) -> None:
         """
