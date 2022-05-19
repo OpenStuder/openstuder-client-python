@@ -431,15 +431,35 @@ class _SIAbstractGatewayClient:
         return frame
 
     @staticmethod
-    def decode_properties_found_frame(frame: str) -> (SIStatus, str, int, List[str]):
+    def decode_properties_found_frame(frame: str) -> (SIStatus, str, int, List[str], bool, SIDeviceFunctions):
         command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'PROPERTIES FOUND' and 'status' in headers and 'id' in headers and 'count' in headers:
             status = SIStatus.from_string(headers['status'])
             if status == SIStatus.SUCCESS:
                 properties = json.loads(body)
-                return status, headers.get('id'), int(headers.get('count', 0)), properties
+                virtual = False
+                if 'virtual' in headers:
+                    virtual = headers.get('virtual') == 'true'
+                functions = SIDeviceFunctions.ALL
+                if 'functions' in headers:
+                    functions_str: str = headers.get('functions')
+                    functions = SIDeviceFunctions.NONE
+                    if functions_str.find('all') >= 0:
+                        functions |= SIDeviceFunctions.ALL
+                    else:
+                        if functions_str.find('inverter') >= 0:
+                            functions |= SIDeviceFunctions.INVERTER
+                        if functions_str.find('charger') >= 0:
+                            functions |= SIDeviceFunctions.CHARGER
+                        if functions_str.find('solar') >= 0:
+                            functions |= SIDeviceFunctions.SOLAR
+                        if functions_str.find('transfer') >= 0:
+                            functions |= SIDeviceFunctions.TRANSFER
+                        if functions_str.find('battery') >= 0:
+                            functions |= SIDeviceFunctions.BATTERY
+                return status, headers.get('id'), int(headers.get('count', 0)), virtual, functions, properties
             else:
-                return status, headers.get('id'), int(headers.get('count', 0)), []
+                return status, headers.get('id'), int(headers.get('count', 0)), False, SIDeviceFunctions.ALL, []
         elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
@@ -830,7 +850,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
             self.__receive_frame_until_commands(['DESCRIPTION', 'ERROR']))
 
     def find_properties(self, property_id: str, virtual: Optional[bool], functions_mask: Optional[SIDeviceFunctions]) \
-            -> Tuple[SIStatus, str, int, List[str]]:
+            -> Tuple[SIStatus, str, int, bool, SIDeviceFunctions, List[str]]:
         """
         This method is used to retrieve a list of existing properties that match the given property ID in the form
         "<device access ID>.<device ID>.<property ID>". The wildcard character "*" is supported for <device access ID>
@@ -846,7 +866,9 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         :param functions_mask: Optional to filter for device functions. See SIDeviceFunctions for details. Defaults
                to all functions (SIDeviceFunctions.ALL).
         :return: Returns four values: 1: Status of the find operation, 2: the searched ID (including wildcard
-                 character), 3: the number of properties found, 4: List of the property IDs.
+                 character), 3: the number of properties found,
+                 4: True if virtual devices were searched, false otherwise. 5: Functions searched for,
+                 6: List of the property IDs.
         :raises SIProtocolError: On a connection, protocol of framing error.
         """
 
@@ -1082,16 +1104,19 @@ class SIAsyncGatewayClientCallbacks:
         """
         pass
 
-    def on_properties_found(self, status: SIStatus, id_: str, count: int, properties: List[str]):
+    def on_properties_found(self, status: SIStatus, id_: str, count: int, virtual: bool, functions: SIDeviceFunctions,
+                            properties: List[str]) -> None:
         """
         Called when the gateway returned the list of found properties requested using the find_properties() method.
 
-        :param status:  Status of the find operation.
-        :param id_: The searched ID (including wildcard character).
-        :param count: The number of properties found.
-        :param properties: List of the property IDs.
+        The callback takes four parameters:
+        @param status: Status of the find operation,
+        @param id_: the searched ID (including wildcard character),
+        @param count: the number of properties found,
+        @param virtual: True if list contains only virtual devices, false if it contains only real devices.
+        @param functions: Function list mask.
+        @param properties: List of the property IDs.
         """
-        pass
 
     def on_property_read(self, status: SIStatus, property_id: str, value: Optional[any]) -> None:
         """
@@ -1276,7 +1301,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         3: the description object.
         """
 
-        self.on_properties_found: Optional[Callable[[SIStatus, str, int, List[str]], None]] = None
+        self.on_properties_found: Optional[Callable[[SIStatus, str, int, bool, SIDeviceFunctions, List[str]], None]] = \
+            None
         """
         Called when the gateway returned the list of found properties requested using the find_properties() method.
 
@@ -1284,7 +1310,9 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         1: Status of the find operation, 
         2: the searched ID (including wildcard character), 
         3: the number of properties found,
-        4: List of the property IDs.
+        4: True if list contains only virtual devices, false if it contains only real devices.
+        5: Function list mask.
+        6: List of the property IDs.
         """
 
         self.on_property_read: Optional[Callable[[SIStatus, str, Optional[any]], None]] = None
@@ -1829,9 +1857,9 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     if callable(self.on_description):
                         self.on_description(status, id_, description)
                 elif command == 'PROPERTIES FOUND':
-                    status, id_, count, lst = super(SIAsyncGatewayClient, self).decode_properties_found_frame(frame)
+                    status, id_, count, virt, func, lst = super(SIAsyncGatewayClient, self).decode_properties_found_frame(frame)
                     if callable(self.on_properties_found):
-                        self.on_properties_found(status, id_, count, lst)
+                        self.on_properties_found(status, id_, count, virt, func, lst)
                 elif command == 'PROPERTY READ':
                     result = super(SIAsyncGatewayClient, self).decode_property_read_frame(frame)
                     if callable(self.on_property_read):

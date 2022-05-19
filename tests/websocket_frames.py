@@ -1103,10 +1103,36 @@ class FINDPROPERTIESFrame(unittest.TestCase):
 
 class PROPERTIESFOUNDFrame(unittest.TestCase):
     def test_decode_success(self):
-        status, property_id, count, properties = _SIAbstractGatewayClient.decode_properties_found_frame('PROPERTIES FOUND\nstatus:Success\nid:*.*.3136\ncount:2\n\n["demo.inv.3136", "demo2.inv.3136"]')
+        status, property_id, count, virtual, functions, properties = _SIAbstractGatewayClient.decode_properties_found_frame('PROPERTIES FOUND\nstatus:Success\nid:*.*.3136\ncount:2\n\n["demo.inv.3136", "demo2.inv.3136"]')
         self.assertEqual(SIStatus.SUCCESS, status)
         self.assertEqual("*.*.3136", property_id)
         self.assertEqual(2, count)
+        self.assertEqual(False, virtual)
+        self.assertEqual(SIDeviceFunctions.ALL, functions)
+        self.assertEqual(2, len(properties))
+        self.assertEqual('demo.inv.3136', properties[0])
+        self.assertEqual('demo2.inv.3136', properties[1])
+
+    def test_decode_success_virtual(self):
+        status, property_id, count, virtual, functions, properties = _SIAbstractGatewayClient.decode_properties_found_frame(
+            'PROPERTIES FOUND\nstatus:Success\nid:*.*.3136\ncount:2\nvirtual:true\n\n["demo.inv.3136", "demo2.inv.3136"]')
+        self.assertEqual(SIStatus.SUCCESS, status)
+        self.assertEqual("*.*.3136", property_id)
+        self.assertEqual(2, count)
+        self.assertEqual(True, virtual)
+        self.assertEqual(SIDeviceFunctions.ALL, functions)
+        self.assertEqual(2, len(properties))
+        self.assertEqual('demo.inv.3136', properties[0])
+        self.assertEqual('demo2.inv.3136', properties[1])
+
+    def test_decode_success_virtual_function(self):
+        status, property_id, count, virtual, functions, properties = _SIAbstractGatewayClient.decode_properties_found_frame(
+            'PROPERTIES FOUND\nstatus:Success\nid:*.*.3136\ncount:2\nvirtual:true\nfunctions:inverter\n\n["demo.inv.3136", "demo2.inv.3136"]')
+        self.assertEqual(SIStatus.SUCCESS, status)
+        self.assertEqual("*.*.3136", property_id)
+        self.assertEqual(2, count)
+        self.assertEqual(True, virtual)
+        self.assertEqual(SIDeviceFunctions.INVERTER, functions)
         self.assertEqual(2, len(properties))
         self.assertEqual('demo.inv.3136', properties[0])
         self.assertEqual('demo2.inv.3136', properties[1])

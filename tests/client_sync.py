@@ -18,8 +18,8 @@ if __name__ == "__main__":
     print(f'DESCRIBE -> DESCRIPTION: status = {status}, id = {id_}, description={desc}')
 
     # Find properties.
-    status, id_, count, props = client.find_properties('*.*.3136', False, SIDeviceFunctions.ALL)
-    print(f'FIND PROPERTY -> PROPERTIES FOUND: status = {status}, id = {id_}, count={count}, props={props}')
+    status, id_, count, virtual, functions, props = client.find_properties('*.*.3136', False, SIDeviceFunctions.ALL)
+    print(f'FIND PROPERTY -> PROPERTIES FOUND: status = {status}, id = {id_}, count={count}, virtual={virtual}, functions={functions}, props={props}')
 
     # Read property.
     status, id_, value = client.read_property('demo.inv.3136')
