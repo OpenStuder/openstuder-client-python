@@ -22,6 +22,9 @@ class MyAsyncCallbacks(SIAsyncGatewayClientCallbacks):
     def on_description(self, status, id_, description):
         pass
 
+    def on_properties_found(self, status, id_, count, virtual, functions, properties):
+        pass
+
     def on_property_read(self, status, property_id, value):
         print(f'PROPERTY READ status={status}, id={property_id}, value={value}')
 
