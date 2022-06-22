@@ -1343,6 +1343,19 @@ class SIAsyncGatewayClientCallbacks:
         """
         pass
 
+    def on_extension_called(self, extension: str, command: str, status: SIExtensionStatus, parameters: dict, body: str):
+        """
+        Called when the gateway returned the status of the call extension operation using the call_extension() method.
+
+        :param extension: Extension that did run the command.
+        :param command: The command.
+        :param status: Status of the command run.
+        :param parameters: Key/value pairs returned by the command, see extension documentation for details.
+        :param body: Optional body (output) returned by the command, see extension documentation for details.
+        :return:
+        """
+        pass
+
 
 class SIAsyncGatewayClient(_SIAbstractGatewayClient):
     """
@@ -1360,6 +1373,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__thread: Optional[Thread] = None
         self.__access_level: SIAccessLevel = SIAccessLevel.NONE
         self.__gateway_version: str = ''
+        self.__available_extensions: List[str] = []
 
         self.__user: Optional[str] = None
         self.__password: Optional[str] = None
@@ -1536,6 +1550,18 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         3: the list of retrieved messages.
         """
 
+        self.on_extension_called: Optional[Callable[[str, str, SIExtensionStatus, dict, str], None]] = None
+        """
+        Called when the gateway returned the status of the call extension operation using the call_extension() method.
+
+        The callback takes 5 parameters: 
+        1: Extension that did run the command.
+        2: The command.
+        3: Status of the command run.
+        4: Key/value pairs returned by the command, see extension documentation for details.
+        5: Optional body (output) returned by the command, see extension documentation for details.
+        """
+
     def connect(self, host: str, port: int = 1987, user: str = None, password: str = None,
                 background: bool = True) -> None:
         """
@@ -1608,6 +1634,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             self.on_datalog_read_csv = callbacks.on_datalog_read_csv
             self.on_device_message = callbacks.on_device_message
             self.on_messages_read = callbacks.on_messages_read
+            self.on_extension_called = callbacks.on_extension_called
 
     def state(self) -> SIConnectionState:
         """
@@ -1635,6 +1662,9 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         """
 
         return self.__gateway_version
+
+    def available_extensions(self) -> List[str]:
+        return self.__available_extensions
 
     def enumerate(self) -> None:
         """
@@ -1905,6 +1935,26 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         # Encode and send READ MESSAGES message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_messages_frame(from_, to, limit))
 
+    def call_extension(self, extension: str, command: str, parameters: dict = {}, body: str = '') -> None:
+        """
+        Runs an extension command on the gateway and returns the result of that operation. The function
+        availableExtensions() can be user to get the list of extensions that are available on the connected gateway.
+
+        The status of this operation and the command results are reported using the on_extension_called() callback.
+
+        :param extension: Extension to use.
+        :param command: Command to run on that extension.
+        :param parameters: Parameters (key/value) to pass to the command, see extension documentation for details.
+        :param body: Body to pass to the command, see extension documentation for details.
+        :raises SIProtocolError: On a connection, protocol of framing error.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send READ MESSAGES message to gateway.
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_call_extension_frame(extension, command, parameters, body))
+
     def disconnect(self) -> None:
         """
         Disconnects the client from the gateway.
@@ -1939,7 +1989,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         try:
             # In AUTHORIZE state we only handle AUTHORIZED messages.
             if self.__state == SIConnectionState.AUTHORIZING:
-                self.__access_level, self.__gateway_version = \
+                self.__access_level, self.__gateway_version, self.__available_extensions = \
                     super(SIAsyncGatewayClient, self).decode_authorized_frame(frame)
 
                 # Change state to CONNECTED.
@@ -2015,6 +2065,10 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     status, count, messages = super(SIAsyncGatewayClient, self).decode_messages_read_frame(frame)
                     if callable(self.on_messages_read):
                         self.on_messages_read(status, count, messages)
+                elif command == 'EXTENSION CALLED':
+                    status, extension, command, parameters, body = super(SIAsyncGatewayClient, self).decode_extension_called_frame(frame)
+                    if callable(self.on_extension_called):
+                        self.on_extension_called(status, extension, command, parameters, body)
                 else:
                     if callable(self.on_error):
                         self.on_error(SIProtocolError('unsupported frame command: {command}'.format(command=command)))
