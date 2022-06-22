@@ -3,7 +3,8 @@ import random
 import string
 import unittest
 # noinspection PyProtectedMember
-from openstuder import _SIAbstractGatewayClient, SIAccessLevel, SIStatus, SIDescriptionFlags, SIWriteFlags, SIProtocolError, SIDeviceFunctions
+from openstuder import _SIAbstractGatewayClient, SIAccessLevel, SIStatus, SIDescriptionFlags, SIWriteFlags, \
+    SIProtocolError, SIDeviceFunctions, SIExtensionStatus
 
 
 def random_int(start: int, end: int) -> int:
@@ -29,24 +30,37 @@ class AUTHORIZEFrame(unittest.TestCase):
 
 class AUTHORIZEDFrame(unittest.TestCase):
     def test_decode_basic(self):
-        access_level, gateway_version = _SIAbstractGatewayClient.decode_authorized_frame('AUTHORIZED\naccess_level:Basic\nprotocol_version:1\ngateway_version:0.0.0.348734\n\n')
+        access_level, gateway_version, extensions = _SIAbstractGatewayClient.decode_authorized_frame('AUTHORIZED\naccess_level:Basic\nprotocol_version:1\ngateway_version:0.0.0.348734\n\n')
         self.assertEqual(SIAccessLevel.BASIC, access_level)
         self.assertEqual('0.0.0.348734', gateway_version)
+        self.assertEqual([], extensions)
+
+    def test_decode_basic_with_extensions(self):
+        access_level, gateway_version, extensions = _SIAbstractGatewayClient.decode_authorized_frame(
+            'AUTHORIZED\naccess_level:Basic\nprotocol_version:1\ngateway_version:0.0.0.348734\nextensions:Ext1,Ext2\n\n')
+        self.assertEqual(SIAccessLevel.BASIC, access_level)
+        self.assertEqual('0.0.0.348734', gateway_version)
+        self.assertEqual(2, len(extensions))
+        self.assertEqual('Ext1', extensions[0])
+        self.assertEqual('Ext2', extensions[1])
 
     def test_decode_installer(self):
-        access_level, gateway_version = _SIAbstractGatewayClient.decode_authorized_frame('AUTHORIZED\naccess_level:Installer\nprotocol_version:1\ngateway_version:0.0.0.348734\n\n')
+        access_level, gateway_version, extensions = _SIAbstractGatewayClient.decode_authorized_frame('AUTHORIZED\naccess_level:Installer\nprotocol_version:1\ngateway_version:0.0.0.348734\n\n')
         self.assertEqual(SIAccessLevel.INSTALLER, access_level)
         self.assertEqual('0.0.0.348734', gateway_version)
+        self.assertEqual([], extensions)
 
     def test_decode_expert(self):
-        access_level, gateway_version = _SIAbstractGatewayClient.decode_authorized_frame('AUTHORIZED\naccess_level:Expert\nprotocol_version:1\ngateway_version:0.0.0.348734\n\n')
+        access_level, gateway_version, extensions = _SIAbstractGatewayClient.decode_authorized_frame('AUTHORIZED\naccess_level:Expert\nprotocol_version:1\ngateway_version:0.0.0.348734\n\n')
         self.assertEqual(SIAccessLevel.EXPERT, access_level)
         self.assertEqual('0.0.0.348734', gateway_version)
+        self.assertEqual([], extensions)
 
     def test_decode_qsp(self):
-        access_level, gateway_version = _SIAbstractGatewayClient.decode_authorized_frame('AUTHORIZED\naccess_level:QSP\nprotocol_version:1\ngateway_version:0.0.0.348734\n\n')
+        access_level, gateway_version, extensions = _SIAbstractGatewayClient.decode_authorized_frame('AUTHORIZED\naccess_level:QSP\nprotocol_version:1\ngateway_version:0.0.0.348734\n\n')
         self.assertEqual(SIAccessLevel.QUALIFIED_SERVICE_PERSONNEL, access_level)
         self.assertEqual('0.0.0.348734', gateway_version)
+        self.assertEqual([], extensions)
 
     def test_decode_frame_error(self):
         with self.assertRaises(SIProtocolError) as context:
@@ -1092,11 +1106,11 @@ class FINDPROPERTIESFrame(unittest.TestCase):
         frame = _SIAbstractGatewayClient.encode_find_properties_frame('*.*.3136')
         self.assertEqual('FIND PROPERTIES\nid:*.*.3136\n\n', frame)
 
-    def test_encod_with_virtual(self):
+    def test_encode_with_virtual(self):
         frame = _SIAbstractGatewayClient.encode_find_properties_frame('*.*.3136', True)
         self.assertEqual('FIND PROPERTIES\nid:*.*.3136\nvirtual:true\n\n', frame)
 
-    def test_encod_with_virtual_and_functions(self):
+    def test_encode_with_virtual_and_functions(self):
         frame = _SIAbstractGatewayClient.encode_find_properties_frame('*.*.3136', True, SIDeviceFunctions.INVERTER | SIDeviceFunctions.CHARGER)
         self.assertEqual('FIND PROPERTIES\nid:*.*.3136\nvirtual:true\nfunctions:inverter,charger\n\n', frame)
 
@@ -1155,6 +1169,120 @@ class PROPERTIESFOUNDFrame(unittest.TestCase):
             _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES FOUND\n')
         with self.assertRaises(SIProtocolError):
             _SIAbstractGatewayClient.decode_properties_read_frame('PROPERTIES FOUND')
+
+
+class CALLEXTENSIONFrame(unittest.TestCase):
+    def test_encode_without_params_without_body(self):
+        frame = _SIAbstractGatewayClient.encode_call_extension_frame("Test", "echo", {}, "")
+        self.assertEqual('CALL EXTENSION\nextension:Test\ncommand:echo\n\n', frame)
+
+    def test_encode_with_params_without_body(self):
+        frame = _SIAbstractGatewayClient.encode_call_extension_frame("Test", "echo", {
+            "p1": 5,
+            "p2": "bazinga"
+        }, "")
+        self.assertEqual('CALL EXTENSION\nextension:Test\ncommand:echo\np1:5\np2:bazinga\n\n', frame)
+
+    def test_encode_without_params_with_body(self):
+        frame = _SIAbstractGatewayClient.encode_call_extension_frame("Test", "echo", {}, "{a:5,B:6}")
+        self.assertEqual('CALL EXTENSION\nextension:Test\ncommand:echo\n\n{a:5,B:6}', frame)
+
+    def test_encode_with_params_with_body(self):
+        frame = _SIAbstractGatewayClient.encode_call_extension_frame("Test", "echo", {
+            "p1": 5,
+            "p2": "bazinga"
+        }, "{a:5,B:6}")
+        self.assertEqual('CALL EXTENSION\nextension:Test\ncommand:echo\np1:5\np2:bazinga\n\n{a:5,B:6}', frame)
+
+
+class EXTENSIONCALLEDFrame(unittest.TestCase):
+    def test_decode_success_without_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:Success\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.SUCCESS, status)
+        self.assertEqual({}, params)
+        self.assertEqual("", body)
+
+    def test_decode_unsupported_extension_without_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:UnsupportedExtension\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.UNSUPPORTED_EXTENSION, status)
+        self.assertEqual({}, params)
+        self.assertEqual("", body)
+
+    def test_decode_unsupported_command_without_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:UnsupportedCommand\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.UNSUPPORTED_COMMAND, status)
+        self.assertEqual({}, params)
+        self.assertEqual("", body)
+
+    def test_decode_invalid_headers_without_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:InvalidHeaders\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.INVALID_HEADERS, status)
+        self.assertEqual({}, params)
+        self.assertEqual("", body)
+
+    def test_decode_invalid_params_without_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:InvalidParameters\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.INVALID_PARAMETERS, status)
+        self.assertEqual({}, params)
+        self.assertEqual("", body)
+
+    def test_decode_forbidden_without_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:Forbidden\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.FORBIDDEN, status)
+        self.assertEqual({}, params)
+        self.assertEqual("", body)
+
+    def test_decode_invalid_body_without_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:InvalidBody\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.INVALID_BODY, status)
+        self.assertEqual({}, params)
+        self.assertEqual("", body)
+
+    def test_decode_error_without_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:Error\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.ERROR, status)
+        self.assertEqual({}, params)
+        self.assertEqual("", body)
+
+    def test_success_with_params_without_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:Succes\np1:toto\np2:5\n\n')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.ERROR, status)
+        self.assertEqual({"p1":"toto", "p2": "5"}, params)
+        self.assertEqual("", body)
+
+    def test_success_without_params_with_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:Succes\n\nHELLO STUDER')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.ERROR, status)
+        self.assertEqual({}, params)
+        self.assertEqual("HELLO STUDER", body)
+
+    def test_success_with_params_with_body(self):
+        extension, command, status, params, body = _SIAbstractGatewayClient.decode_extension_called_frame('EXTENSION CALLED\nextension:Test\ncommand:echo\nstatus:Succes\np1:toto\np2:5\n\nHELLO STUDER')
+        self.assertEqual("Test", extension)
+        self.assertEqual("echo", command)
+        self.assertEqual(SIExtensionStatus.ERROR, status)
+        self.assertEqual({"p1":"toto", "p2": "5"}, params)
+        self.assertEqual("HELLO STUDER", body)
 
 
 if __name__ == '__main__':

@@ -58,7 +58,7 @@ class SIStatus(Enum):
             return SIStatus.ERROR
 
     @staticmethod
-    def from_ordinal(ordinal: int):
+    def from_ordinal(ordinal: int) -> SIStatus:
         ordinals = {
             0: SIStatus.SUCCESS,
             1: SIStatus.IN_PROGRESS,
@@ -184,6 +184,51 @@ class SIDeviceFunctions(Flag):
     TRANSFER = auto()
     BATTERY = auto()
     ALL = auto()
+
+
+class SIExtensionStatus(Enum):
+    SUCCESS = 0
+    UNSUPPORTED_EXTENSION = -1
+    UNSUPPORTED_COMMAND = -2
+    INVALID_HEADERS = -3
+    INVALID_PARAMETERS = -3
+    INVALID_BODY = -4
+    FORBIDDEN = -5
+    ERROR = -6
+
+    @staticmethod
+    def from_string(string: str) -> SIExtensionStatus:
+        if string == 'Success':
+            return SIExtensionStatus.SUCCESS
+        elif string == 'UnsupportedExtension':
+            return SIExtensionStatus.UNSUPPORTED_EXTENSION
+        elif string == 'UnsupportedCommand':
+            return SIExtensionStatus.UNSUPPORTED_COMMAND
+        elif string == 'InvalidHeaders':
+            return SIExtensionStatus.INVALID_HEADERS
+        elif string == 'InvalidParameters':
+            return SIExtensionStatus.INVALID_PARAMETERS
+        elif string == 'InvalidBody':
+            return SIExtensionStatus.INVALID_BODY
+        elif string == 'Forbidden':
+            return SIExtensionStatus.FORBIDDEN
+        elif string == 'Error':
+            return SIExtensionStatus.ERROR
+        else:
+            return SIExtensionStatus.ERROR
+
+    @staticmethod
+    def from_ordinal(ordinal: int)  -> SIExtensionStatus:
+        ordinals = {
+            0: SIExtensionStatus.SUCCESS,
+            -1: SIExtensionStatus.UNSUPPORTED_EXTENSION,
+            -2: SIExtensionStatus.UNSUPPORTED_COMMAND,
+            -3: SIExtensionStatus.INVALID_HEADERS,
+            -4: SIExtensionStatus.INVALID_BODY,
+            -5: SIExtensionStatus.FORBIDDEN,
+            -6: SIExtensionStatus.ERROR
+        }
+        return ordinals.get(ordinal, SIExtensionStatus.ERROR)
 
 
 class SIProtocolError(IOError):
@@ -332,12 +377,15 @@ class _SIAbstractGatewayClient:
                                                                                             password=password)
 
     @staticmethod
-    def decode_authorized_frame(frame: str) -> Tuple[SIAccessLevel, str]:
+    def decode_authorized_frame(frame: str) -> Tuple[SIAccessLevel, str, List[str]]:
         command, headers, _ = _SIAbstractGatewayClient.decode_frame(frame)
         if command == 'AUTHORIZED' and 'access_level' in headers and 'protocol_version' in headers and \
                 'gateway_version' in headers:
+            extensions = []
+            if 'extensions' in headers:
+                extensions = headers['extensions'].split(',')
             if headers['protocol_version'] == '1':
-                return SIAccessLevel.from_string(headers['access_level']), headers['gateway_version']
+                return SIAccessLevel.from_string(headers['access_level']), headers['gateway_version'], extensions
             else:
                 raise SIProtocolError('protocol version 1 not supported by server')
         elif command == 'ERROR' and 'reason' in headers:
@@ -679,6 +727,31 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error receiving device message')
 
     @staticmethod
+    def encode_call_extension_frame(extension: str, command: str, parameters: dict, body: str):
+        frame = 'CALL EXTENSION\n'
+        frame += 'extension:{extension}\n'.format(extension=extension)
+        frame += 'command:{command}\n'.format(command=command)
+        for key, value in parameters.items():
+            frame += '{key}:{value}\n'.format(key=key, value=value)
+        frame += '\n'
+        frame += body
+        return frame
+
+    @staticmethod
+    def decode_extension_called_frame(frame: str) -> Tuple[str, str, SIExtensionStatus, dict, str]:
+        command, headers, body = _SIAbstractGatewayClient.decode_frame(frame)
+        if command == 'EXTENSION CALLED' and 'extension' in headers and 'command' in headers and 'status' in headers:
+            additional_headers = {}
+            for key, value in headers.items():
+                if key != 'extension' and key != 'command' and key != 'status':
+                    additional_headers[key] = value
+            return headers['extension'], headers['command'], SIExtensionStatus.from_string(headers['status']), additional_headers, body
+        elif command == 'ERROR' and 'reason' in headers:
+            raise SIProtocolError(headers['reason'])
+        else:
+            raise SIProtocolError('unknown error receiving extension called message')
+
+    @staticmethod
     def peek_frame_command(frame: str) -> str:
         return frame[:frame.index('\n')]
 
@@ -730,6 +803,7 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         self.__ws: Optional[websocket.WebSocket] = None
         self.__access_level: SIAccessLevel = SIAccessLevel.NONE
         self.__gateway_version: str = ''
+        self.__availableExtensions: List[str] = []
 
     def connect(self, host: str, port: int = 1987, user: str = None, password: str = None) -> SIAccessLevel:
         """
@@ -760,8 +834,8 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         else:
             self.__ws.send(super(SIGatewayClient, self).encode_authorize_frame_with_credentials(user, password))
         try:
-            self.__access_level, self.__gateway_version = super(SIGatewayClient, self).decode_authorized_frame(
-                self.__ws.recv())
+            self.__access_level, self.__gateway_version, self.__availableExtensions = \
+                super(SIGatewayClient, self).decode_authorized_frame(self.__ws.recv())
         except ConnectionRefusedError:
             self.__state = SIConnectionState.DISCONNECTED
             raise SIProtocolError('WebSocket connection refused')
@@ -798,6 +872,14 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         """
 
         return self.__gateway_version
+
+    def available_extensions(self) -> List[str]:
+        """
+        Returns the list of available protocol extensions on the connected gateway.
+
+        :return: List of available protocol extensions.
+        """
+        return self.__availableExtensions
 
     def enumerate(self) -> Tuple[SIStatus, int]:
         """
@@ -1028,6 +1110,31 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         # Wait for MESSAGES READ message, decode it and return data.
         return super(SIGatewayClient, self).decode_messages_read_frame(
             self.__receive_frame_until_commands(['MESSAGES READ', 'ERROR']))
+
+    def call_extension(self, extension: str, command: str, parameters: dict = {}, body: str = '') -> Tuple[SIExtensionStatus, dict, str]:
+        """
+        Runs an extension command on the gateway and returns the result of that operation. The function
+        availableExtensions() can be user to get the list of extensions that are available on the connected gateway.
+
+        :param extension: Extension to use.
+        :param command: Command to run on that extension.
+        :param parameters: Parameters (key/value) to pass to the command, see extension documentation for details.
+        :param body: Body to pass to the command, see extension documentation for details.
+        :return: Returns three values. 1: the status of the operation, 2: the returned key/value pairs from the command,
+                 3: an optional body output of the command.
+        :raises SIProtocolError: On a connection, protocol of framing error.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send CALL EXTENSION message to gateway.
+        self.__ws.send(super(SIGatewayClient, self).encode_call_extension_frame(extension, command, parameters, body))
+
+        # Wait for EXTENSION CALLED message, decode it and return data.
+        _, _, status, params, body = super(SIGatewayClient, self).decode_extension_called_frame(
+            self.__receive_frame_until_commands(['EXTENSION CALLED', 'ERROR']))
+        return status, params, body
 
     def disconnect(self) -> None:
         """
