@@ -4,6 +4,8 @@ from enum import Enum, Flag, auto
 from threading import Thread
 import datetime
 import json
+
+import cbor
 import websocket
 import cbor2
 import io
@@ -727,7 +729,7 @@ class _SIAbstractGatewayClient:
             raise SIProtocolError('unknown error receiving device message')
 
     @staticmethod
-    def encode_call_extension_frame(extension: str, command: str, parameters: dict, body: str):
+    def encode_call_extension_frame(extension: str, command: str, parameters: dict, body: str) -> str:
         frame = 'CALL EXTENSION\n'
         frame += 'extension:{extension}\n'.format(extension=extension)
         frame += 'command:{command}\n'.format(command=command)
@@ -1664,6 +1666,11 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         return self.__gateway_version
 
     def available_extensions(self) -> List[str]:
+        """
+        Returns the list of available protocol extensions on the connected gateway.
+
+        :return: List of available protocol extensions.
+        """
         return self.__available_extensions
 
     def enumerate(self) -> None:
@@ -2125,12 +2132,15 @@ class _SIAbstractBluetoothGatewayClient:
                cbor2.dumps(1)
 
     @staticmethod
-    def decode_authorized_frame(frame: bytes) -> Tuple[SIAccessLevel, str]:
+    def decode_authorized_frame(frame: bytes) -> Tuple[SIAccessLevel, str, List[str]]:
         command_id, sequence = _SIAbstractBluetoothGatewayClient.decode_frame(frame)
-        if command_id == 0x81 and len(sequence) == 3 and isinstance(sequence[0], int) and \
+        if command_id == 0x81 and 3 <= len(sequence) <= 4 and isinstance(sequence[0], int) and \
                 isinstance(sequence[1], int) and isinstance(sequence[2], str):
             if sequence[1] == 1:
-                return SIAccessLevel.from_ordinal(sequence[0]), sequence[2]
+                extensions = []
+                if len(sequence) == 4:
+                    extensions = sequence[3].split(',')
+                return SIAccessLevel.from_ordinal(sequence[0]), sequence[2], extensions
             else:
                 raise SIProtocolError('protocol version 1 not supported by server')
         elif command_id == 0xFF and len(sequence) == 1 and isinstance(sequence[0], str):
@@ -2352,6 +2362,24 @@ class _SIAbstractBluetoothGatewayClient:
             raise SIProtocolError('unknown error receiving device message')
 
     @staticmethod
+    def encode_call_extension_frame(extension: str, command: str, parameters: List[any]) -> bytes:
+        frame = cbor.dumps(0x0B) + cbor.dumps(extension) + cbor.dumps(command)
+        for value in parameters:
+            frame += cbor.dumps(value)
+        return frame
+
+    @staticmethod
+    def decode_extension_called_frame(frame: bytes) -> Tuple[str, str, SIExtensionStatus, List[any]]:
+        command_id, sequence = _SIAbstractBluetoothGatewayClient.decode_frame(frame)
+        if command_id == 0x8B and len(sequence) >= 3 and isinstance(sequence[0], str) and \
+                isinstance(sequence[1], str) and isinstance(sequence[2], int):
+            return sequence[0], sequence[1], SIExtensionStatus.from_ordinal(sequence[2]), sequence[3:]
+        elif command_id == 0xFF and len(sequence) == 1 and isinstance(sequence[0], str):
+            raise SIProtocolError(sequence[0])
+        else:
+            raise SIProtocolError('unknown error receiving extension called message')
+
+    @staticmethod
     def peek_frame_command(frame: bytes) -> int:
         return cbor2.loads(frame)
 
@@ -2522,6 +2550,17 @@ class SIBluetoothGatewayClientCallbacks:
         """
         pass
 
+    def on_extension_called(self, extension: str, command: str, status: SIExtensionStatus, parameters: List[any]) -> None:
+        """
+        Called when the gateway returned the status of the call extension operation using the call_extension() method.
+
+        :param extension: Extension that did run the command.
+        :param command: The command.
+        :param status: Status of the command run.
+        :param parameters: Key/value pairs returned by the command, see extension documentation for details.
+        """
+        pass
+
 
 class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
     """
@@ -2545,6 +2584,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         self.__wait_for_disconnected: Optional[asyncio.Future] = None
         self.__access_level: SIAccessLevel = SIAccessLevel.NONE
         self.__gateway_version: str = ''
+        self.__available_extensions: List[str] = []
 
         self.__user: Optional[str] = None
         self.__password: Optional[str] = None
@@ -2680,6 +2720,16 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         3: the list of retrieved messages.
         """
 
+        self.on_extension_called: Optional[Callable[[str, str, SIExtensionStatus, List[any]], None]] = None
+        """
+        Called when the gateway returned the status of the call extension operation using the call_extension() method.
+
+        1: Extension that did run the command.
+        2: The command.
+        3: Status of the command run.
+        4: Key/value pairs returned by the command, see extension documentation for details.
+        """
+
     @staticmethod
     def discover(timeout: float = 10.0):
         """
@@ -2757,6 +2807,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
             self.on_datalog_read = callbacks.on_datalog_read
             self.on_device_message = callbacks.on_device_message
             self.on_messages_read = callbacks.on_messages_read
+            self.on_extension_called = callbacks.on_extension_called
 
     def state(self) -> SIConnectionState:
         """
@@ -2784,6 +2835,14 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         """
 
         return self.__gateway_version
+
+    def available_extensions(self):
+        """
+        Returns the list of available protocol extensions on the connected gateway.
+
+        :return: List of available protocol extensions.
+        """
+        return self.__available_extensions
 
     def enumerate(self) -> None:
         """
@@ -2966,6 +3025,26 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         # Encode and send READ MESSAGES message to gateway.
         self.__tx_send(super(SIBluetoothGatewayClient, self).encode_read_messages_frame(from_, to, limit))
 
+    def call_extension(self, extension: str, command: str, parameters: List[any] = []) -> None:
+        """
+        Runs an extension command on the gateway and returns the result of that operation. The function
+        availableExtensions() can be user to get the list of extensions that are available on the connected gateway.
+
+        The status of this operation and the command results are reported using the on_extension_called() callback.
+
+        :param extension: Extension to use.
+        :param command: Command to run on that extension.
+        :param parameters: Parameters list to pass to the command, see extension documentation for details.
+        :raises SIProtocolError: On a connection, protocol of framing error.
+        """
+
+        # Ensure that the client is in the CONNECTED state.
+        self.__ensure_in_state(SIConnectionState.CONNECTED)
+
+        # Encode and send READ MESSAGES message to gateway.
+        self.__tx_send(
+            super(SIBluetoothGatewayClient, self).encode_call_extension_frame(extension, command, parameters))
+
     def disconnect(self) -> None:
         """
         Disconnects the client from the gateway.
@@ -3043,7 +3122,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
                 if command != 0x81:
                     raise SIProtocolError('Authorization failed')
 
-                self.__access_level, self.__gateway_version = \
+                self.__access_level, self.__gateway_version, self.__available_extensions = \
                     super(SIBluetoothGatewayClient, self).decode_authorized_frame(frame)
 
                 # Change state to CONNECTED.
@@ -3108,6 +3187,11 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
                         super(SIBluetoothGatewayClient, self).decode_messages_read_frame(frame)
                     if callable(self.on_messages_read):
                         self.on_messages_read(status, count, messages)
+                elif command == 0x8B:
+                    extension, command, status, parameters = \
+                        super(SIBluetoothGatewayClient, self).decode_extension_called_frame(frame)
+                    if callable(self.on_extension_called):
+                        self.on_extension_called(extension, command, status, parameters)
                 else:
                     if callable(self.on_error):
                         self.on_error(
