@@ -1949,7 +1949,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
     def call_extension(self, extension: str, command: str, parameters: Optional[dict] = None, body: str = '') -> None:
         """
         Runs an extension command on the gateway and returns the result of that operation. The function
-        availableExtensions() can be user to get the list of extensions that are available on the connected gateway.
+        available_extensions() can be user to get the list of extensions that are available on the connected gateway.
 
         The status of this operation and the command results are reported using the on_extension_called() callback.
 
