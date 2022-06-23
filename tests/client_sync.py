@@ -3,7 +3,7 @@ from openstuder import SIGatewayClient, SIDescriptionFlags, SIDeviceFunctions
 if __name__ == "__main__":
     # Establish connection.
     client = SIGatewayClient()
-    client.connect('openstuder.lan')
+    client.connect('localhost', 1987, "expert", "expert")
 
     # Client/gateway information.
     print(f'CONNECTED: access_level = {client.access_level()}, gateway_version = {client.gateway_version()}')
@@ -41,6 +41,10 @@ if __name__ == "__main__":
     # Read messages.
     status, count, messages = client.read_messages()
     print(f'READ MESSAGES -> MESSAGES READ: status = {status}, count = {count}, messages = {messages}')
+
+    # Call extension.
+    status, params, body = client.call_extension("WifiConfig", "status")
+    print(f'EXTENSION CALLED (WiFi status) -> status = {status}, params = {params}')
 
     # Disconnect.
     client.disconnect()
