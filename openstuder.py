@@ -4,7 +4,6 @@ from enum import Enum, Flag, auto
 from threading import Thread
 import datetime
 import json
-
 import cbor
 import websocket
 import cbor2
@@ -220,7 +219,7 @@ class SIExtensionStatus(Enum):
             return SIExtensionStatus.ERROR
 
     @staticmethod
-    def from_ordinal(ordinal: int)  -> SIExtensionStatus:
+    def from_ordinal(ordinal: int) -> SIExtensionStatus:
         ordinals = {
             0: SIExtensionStatus.SUCCESS,
             -1: SIExtensionStatus.UNSUPPORTED_EXTENSION,
@@ -747,7 +746,8 @@ class _SIAbstractGatewayClient:
             for key, value in headers.items():
                 if key != 'extension' and key != 'command' and key != 'status':
                     additional_headers[key] = value
-            return headers['extension'], headers['command'], SIExtensionStatus.from_string(headers['status']), additional_headers, body
+            return headers['extension'], headers['command'], SIExtensionStatus.from_string(headers['status']), \
+                additional_headers, body
         elif command == 'ERROR' and 'reason' in headers:
             raise SIProtocolError(headers['reason'])
         else:
@@ -1113,7 +1113,8 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         return super(SIGatewayClient, self).decode_messages_read_frame(
             self.__receive_frame_until_commands(['MESSAGES READ', 'ERROR']))
 
-    def call_extension(self, extension: str, command: str, parameters: dict = {}, body: str = '') -> Tuple[SIExtensionStatus, dict, str]:
+    def call_extension(self, extension: str, command: str, parameters: Optional[dict] = None, body: str = '') -> \
+            Tuple[SIExtensionStatus, dict, str]:
         """
         Runs an extension command on the gateway and returns the result of that operation. The function
         availableExtensions() can be user to get the list of extensions that are available on the connected gateway.
@@ -1126,6 +1127,9 @@ class SIGatewayClient(_SIAbstractGatewayClient):
                  3: an optional body output of the command.
         :raises SIProtocolError: On a connection, protocol of framing error.
         """
+
+        if parameters is None:
+            parameters = {}
 
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
@@ -1288,7 +1292,7 @@ class SIAsyncGatewayClientCallbacks:
         Called when the gateway returned the status of the properties unsubscription requested using the
         unsubscribe_from_properties() method.
 
-        :param statuses: The statuses of the individual unsubscriptions.
+        :param statuses: The statuses of the individual unsubscribe requests.
         """
         pass
 
@@ -1942,7 +1946,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         # Encode and send READ MESSAGES message to gateway.
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_read_messages_frame(from_, to, limit))
 
-    def call_extension(self, extension: str, command: str, parameters: dict = {}, body: str = '') -> None:
+    def call_extension(self, extension: str, command: str, parameters: Optional[dict] = None, body: str = '') -> None:
         """
         Runs an extension command on the gateway and returns the result of that operation. The function
         availableExtensions() can be user to get the list of extensions that are available on the connected gateway.
@@ -1956,11 +1960,15 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         :raises SIProtocolError: On a connection, protocol of framing error.
         """
 
+        if parameters is None:
+            parameters = {}
+
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
 
         # Encode and send READ MESSAGES message to gateway.
-        self.__ws.send(super(SIAsyncGatewayClient, self).encode_call_extension_frame(extension, command, parameters, body))
+        self.__ws.send(super(SIAsyncGatewayClient, self).encode_call_extension_frame(extension, command,
+                                                                                     parameters, body))
 
     def disconnect(self) -> None:
         """
@@ -1977,7 +1985,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         if self.__state != state:
             raise SIProtocolError("invalid client state")
 
-    def __on_open(self, ws) -> None:
+    def __on_open(self, _) -> None:
         # Change state to AUTHORIZING.
         self.__state = SIConnectionState.AUTHORIZING
 
@@ -1988,7 +1996,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
             self.__ws.send(
                 super(SIAsyncGatewayClient, self).encode_authorize_frame_with_credentials(self.__user, self.__password))
 
-    def __on_message(self, ws, frame: str) -> None:
+    def __on_message(self, _, frame: str) -> None:
 
         # Determine the actual command.
         command = super(SIAsyncGatewayClient, self).peek_frame_command(frame)
@@ -2021,7 +2029,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     if callable(self.on_description):
                         self.on_description(status, id_, description)
                 elif command == 'PROPERTIES FOUND':
-                    status, id_, count, virt, func, lst = super(SIAsyncGatewayClient, self).decode_properties_found_frame(frame)
+                    status, id_, count, virt, func, lst = \
+                        super(SIAsyncGatewayClient, self).decode_properties_found_frame(frame)
                     if callable(self.on_properties_found):
                         self.on_properties_found(status, id_, count, virt, func, lst)
                 elif command == 'PROPERTY READ':
@@ -2073,7 +2082,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                     if callable(self.on_messages_read):
                         self.on_messages_read(status, count, messages)
                 elif command == 'EXTENSION CALLED':
-                    status, extension, command, parameters, body = super(SIAsyncGatewayClient, self).decode_extension_called_frame(frame)
+                    status, extension, command, parameters, body = \
+                        super(SIAsyncGatewayClient, self).decode_extension_called_frame(frame)
                     if callable(self.on_extension_called):
                         self.on_extension_called(status, extension, command, parameters, body)
                 else:
@@ -2086,11 +2096,11 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
                 self.__ws.close()
                 self.__state = SIConnectionState.DISCONNECTED
 
-    def __on_error(self, ws, error: Exception) -> None:
+    def __on_error(self, _, error: Exception) -> None:
         if callable(self.on_error):
             self.on_error(SIProtocolError(error.args[1]))
 
-    def __on_close(self, ws) -> None:
+    def __on_close(self, _) -> None:
         # Change state to DISCONNECTED.
         self.__state = SIConnectionState.DISCONNECTED
 
@@ -2550,7 +2560,8 @@ class SIBluetoothGatewayClientCallbacks:
         """
         pass
 
-    def on_extension_called(self, extension: str, command: str, status: SIExtensionStatus, parameters: List[any]) -> None:
+    def on_extension_called(self, extension: str, command: str, status: SIExtensionStatus,
+                            parameters: List[any]) -> None:
         """
         Called when the gateway returned the status of the call extension operation using the call_extension() method.
 
@@ -2568,7 +2579,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
 
     This client connects to the OpenStuder gateway via the Bluetooth LE protocol. The Bluetooth protocol offers a
     reduced functionality due to the difference in throughput and MTU. The advantage of using Bluetooth is that no
-    WiFi connection has to be configured in order to connect to the gateway and existing OpenStuder gatways can be
+    WiFi connection has to be configured in order to connect to the gateway and existing OpenStuder gateways can be
     easily discovered.
     """
 
@@ -2577,7 +2588,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         self.on_datalog_read_csv = None
         self.__state: SIConnectionState = SIConnectionState.DISCONNECTED
         self.__ble: Optional[BleakClient] = None
-        self.__loop: asyncio.AbstractEventLoop = None
+        self.__loop: Optional[asyncio.AbstractEventLoop] = None
         self.__max_fragment_size = max_fragment_size
         self.__rx_buffer: bytearray = bytearray()
         self.__thread: Optional[Thread] = None
@@ -3025,7 +3036,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         # Encode and send READ MESSAGES message to gateway.
         self.__tx_send(super(SIBluetoothGatewayClient, self).encode_read_messages_frame(from_, to, limit))
 
-    def call_extension(self, extension: str, command: str, parameters: List[any] = []) -> None:
+    def call_extension(self, extension: str, command: str, parameters: Optional[List[any]] = None) -> None:
         """
         Runs an extension command on the gateway and returns the result of that operation. The function
         availableExtensions() can be user to get the list of extensions that are available on the connected gateway.
@@ -3037,6 +3048,9 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         :param parameters: Parameters list to pass to the command, see extension documentation for details.
         :raises SIProtocolError: On a connection, protocol of framing error.
         """
+
+        if parameters is None:
+            parameters = []
 
         # Ensure that the client is in the CONNECTED state.
         self.__ensure_in_state(SIConnectionState.CONNECTED)
@@ -3105,7 +3119,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
                 self.__loop.call_soon_threadsafe(
                     lambda: self.__loop.create_task(self.__ble.write_gatt_char(_SI_BLUETOOTH_TX_UUID, fragment, False)))
 
-    def __rx_callback(self, sender: int, payload: bytearray):
+    def __rx_callback(self, _: int, payload: bytearray):
         remaining_fragments = payload[0]
         self.__rx_buffer += payload[1:]
         if remaining_fragments != 0:
