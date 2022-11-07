@@ -1721,8 +1721,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_describe_frame(device_access_id, device_id,
                                                                                property_id, flags))
 
-    def find_properties(self, property_id: str, virtual: Optional[bool], functions_mask: Optional[SIDeviceFunctions]) \
-            -> None:
+    def find_properties(self, property_id: str, virtual: Optional[bool] = None,
+                        functions_mask: Optional[SIDeviceFunctions] = None) -> None:
         """
         This method is used to retrieve a list of existing properties that match the given property ID in the form
         "<device access ID>.<device ID>.<property ID>". The wildcard character "*" is supported for <device access ID>
