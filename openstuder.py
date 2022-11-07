@@ -4,7 +4,6 @@ from enum import Enum, Flag, auto
 from threading import Thread
 import datetime
 import json
-import cbor
 import websocket
 import cbor2
 import io
@@ -933,7 +932,8 @@ class SIGatewayClient(_SIAbstractGatewayClient):
         return super(SIGatewayClient, self).decode_description_frame(
             self.__receive_frame_until_commands(['DESCRIPTION', 'ERROR']))
 
-    def find_properties(self, property_id: str, virtual: Optional[bool], functions_mask: Optional[SIDeviceFunctions]) \
+    def find_properties(self, property_id: str, virtual: Optional[bool] = None,
+                        functions_mask: Optional[SIDeviceFunctions] = None) \
             -> Tuple[SIStatus, str, int, bool, SIDeviceFunctions, List[str]]:
         """
         This method is used to retrieve a list of existing properties that match the given property ID in the form
@@ -1721,8 +1721,8 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
         self.__ws.send(super(SIAsyncGatewayClient, self).encode_describe_frame(device_access_id, device_id,
                                                                                property_id, flags))
 
-    def find_properties(self, property_id: str, virtual: Optional[bool], functions_mask: Optional[SIDeviceFunctions]) \
-            -> None:
+    def find_properties(self, property_id: str, virtual: Optional[bool] = None,
+                        functions_mask: Optional[SIDeviceFunctions] = None) -> None:
         """
         This method is used to retrieve a list of existing properties that match the given property ID in the form
         "<device access ID>.<device ID>.<property ID>". The wildcard character "*" is supported for <device access ID>
@@ -1949,7 +1949,7 @@ class SIAsyncGatewayClient(_SIAbstractGatewayClient):
     def call_extension(self, extension: str, command: str, parameters: Optional[dict] = None, body: str = '') -> None:
         """
         Runs an extension command on the gateway and returns the result of that operation. The function
-        availableExtensions() can be user to get the list of extensions that are available on the connected gateway.
+        available_extensions() can be user to get the list of extensions that are available on the connected gateway.
 
         The status of this operation and the command results are reported using the on_extension_called() callback.
 
@@ -2568,7 +2568,7 @@ class SIBluetoothGatewayClientCallbacks:
         :param extension: Extension that did run the command.
         :param command: The command.
         :param status: Status of the command run.
-        :param parameters: Key/value pairs returned by the command, see extension documentation for details.
+        :param parameters: Parameters returned by the command, see extension documentation for details.
         """
         pass
 
@@ -2738,7 +2738,7 @@ class SIBluetoothGatewayClient(_SIAbstractBluetoothGatewayClient):
         1: Extension that did run the command.
         2: The command.
         3: Status of the command run.
-        4: Key/value pairs returned by the command, see extension documentation for details.
+        4: Parameters returned by the command, see extension documentation for details.
         """
 
     @staticmethod
